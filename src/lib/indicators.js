@@ -92,3 +92,28 @@ export function melhorPorValor(valorA, valorB, inverso) {
   if (inverso) return valorA < valorB ? 'A' : 'B'
   return valorA > valorB ? 'A' : 'B'
 }
+
+/**
+ * Classifica a tendência de um indicador entre dois períodos, respeitando a direção
+ * (inverso = menor é melhor). Usado para os alertas de piora.
+ */
+export function classificarTendencia(valorAtual, valorAnterior, inverso) {
+  if (valorAtual == null || valorAnterior == null) return null
+  if (valorAtual === valorAnterior) return 'estavel'
+  const melhorou = inverso ? valorAtual < valorAnterior : valorAtual > valorAnterior
+  return melhorou ? 'melhora' : 'piora'
+}
+
+/**
+ * Compara os indicadores de dois períodos consecutivos (mesma empresa) e retorna,
+ * para cada indicador com valor nos dois períodos, a tendência e a variação.
+ */
+export function compararPeriodos(indicadoresAtuais, indicadoresAnteriores) {
+  const porChaveAnterior = Object.fromEntries(indicadoresAnteriores.map((r) => [r.key, r]))
+  return indicadoresAtuais.map((atual) => {
+    const anterior = porChaveAnterior[atual.key]
+    const inverso = atual.benchmark?.inverso ?? anterior?.benchmark?.inverso ?? false
+    const tendencia = classificarTendencia(atual.valor, anterior?.valor, inverso)
+    return { ...atual, tendencia, valorAnterior: anterior?.valor ?? null }
+  })
+}

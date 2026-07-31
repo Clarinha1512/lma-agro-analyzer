@@ -103,7 +103,7 @@ create table analises (
   membro            text,                       -- nome de quem fez
 
   -- Veredito do membro (análise manual pedagógica)
-  veredito_membro   text check (veredito_membro in ('COMPRA','MANUTENCAO','VENDA', null)),
+  veredito_membro   text check (veredito_membro in ('COMPRA','MANUTENÇÃO','VENDA') or veredito_membro is null),
   notas_membro      text,
 
   -- Veredito do sistema (automático)
@@ -118,21 +118,42 @@ comment on table analises is 'Análises feitas pelos membros para comparação p
 create index idx_analises_ticker on analises(ticker);
 
 -- ────────────────────────────────────────────────────────────────
---  RLS (Row Level Security) — libera acesso público de leitura/escrita
---  Como é um app interno da liga, deixamos aberto para simplificar.
---  (Pode restringir depois com autenticação.)
+--  Tabela: profiles
+--  Perfil de cada membro autenticado (Supabase Auth). O nome vem do
+--  cadastro e é usado no lugar do campo de texto livre "membro".
+-- ────────────────────────────────────────────────────────────────
+create table profiles (
+  id         uuid primary key references auth.users(id) on delete cascade,
+  nome       text not null,
+  criado_em  timestamptz default now()
+);
+
+comment on table profiles is 'Perfil de cada membro autenticado (nome de exibição)';
+
+-- ────────────────────────────────────────────────────────────────
+--  RLS (Row Level Security)
+--  App exige login (Supabase Auth): leitura e escrita liberadas para
+--  qualquer usuário autenticado, mas nunca para o público anônimo.
 -- ────────────────────────────────────────────────────────────────
 alter table empresas enable row level security;
 alter table dados_financeiros enable row level security;
 alter table benchmarks enable row level security;
 alter table analises enable row level security;
+alter table profiles enable row level security;
 
-create policy "leitura publica empresas" on empresas for select using (true);
-create policy "leitura publica dados" on dados_financeiros for select using (true);
-create policy "escrita publica dados" on dados_financeiros for insert with check (true);
-create policy "update publico dados" on dados_financeiros for update using (true);
-create policy "leitura publica benchmarks" on benchmarks for select using (true);
-create policy "update publico benchmarks" on benchmarks for update using (true);
-create policy "leitura publica analises" on analises for select using (true);
-create policy "escrita publica analises" on analises for insert with check (true);
-create policy "delete publico analises" on analises for delete using (true);
+create policy "leitura autenticada empresas" on empresas for select to authenticated using (true);
+
+create policy "leitura autenticada dados" on dados_financeiros for select to authenticated using (true);
+create policy "escrita autenticada dados" on dados_financeiros for insert to authenticated with check (true);
+create policy "update autenticado dados" on dados_financeiros for update to authenticated using (true);
+
+create policy "leitura autenticada benchmarks" on benchmarks for select to authenticated using (true);
+create policy "update autenticado benchmarks" on benchmarks for update to authenticated using (true);
+
+create policy "leitura autenticada analises" on analises for select to authenticated using (true);
+create policy "escrita autenticada analises" on analises for insert to authenticated with check (true);
+create policy "delete autenticado analises" on analises for delete to authenticated using (true);
+
+create policy "leitura autenticada profiles" on profiles for select to authenticated using (true);
+create policy "inserir proprio profile" on profiles for insert to authenticated with check (auth.uid() = id);
+create policy "atualizar proprio profile" on profiles for update to authenticated using (auth.uid() = id);

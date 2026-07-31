@@ -28,7 +28,7 @@ function icon(name) {
   return `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`
 }
 
-export function renderSidebar(activePath) {
+export function renderSidebar(activePath, nomeUsuario) {
   const items = NAV_ITEMS.map(
     (item) => `
       <a href="#${item.path}" class="nav-item${item.path === activePath ? ' active' : ''}">
@@ -48,7 +48,8 @@ export function renderSidebar(activePath) {
       </div>
       <nav class="nav">${items}</nav>
       <div class="sidebar-footer">
-        <span>v0.1.0</span>
+        ${nomeUsuario ? `<div class="sidebar-user">${nomeUsuario}</div>` : ''}
+        <button id="sair-btn" class="sidebar-logout">Sair</button>
       </div>
     </aside>`
 }

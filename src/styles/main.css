@@ -581,6 +581,212 @@ textarea {
   background: var(--color-border);
 }
 
+/* Tendência (alertas de piora) */
+.trend {
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+.trend-melhora {
+  color: var(--color-ok);
+}
+
+.trend-piora {
+  color: var(--color-danger);
+}
+
+.trend-estavel {
+  color: var(--color-text-muted);
+}
+
+.alert-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: rgba(192, 57, 43, 0.05);
+}
+
+.alert-item-body strong {
+  color: var(--color-primary);
+}
+
+.alert-item-detail {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.alert-clickable {
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.alert-clickable:hover {
+  background: rgba(192, 57, 43, 0.1);
+}
+
+/* Benchmarks (Configurações) */
+.benchmark-group + .benchmark-group {
+  margin-top: 24px;
+}
+
+.benchmark-group h3 {
+  font-size: 12.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  margin: 0 0 12px;
+}
+
+.benchmark-row {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.benchmark-row:last-child {
+  border-bottom: none;
+}
+
+.benchmark-row .btn {
+  margin-top: 12px;
+}
+
+.benchmark-status {
+  margin-left: 12px;
+}
+
+/* Autenticação */
+.auth-screen {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+}
+
+.auth-card h1 {
+  font-size: 20px;
+  color: var(--color-primary);
+  margin: 0 0 4px;
+}
+
+.auth-card .field {
+  text-align: left;
+  margin-bottom: 12px;
+}
+
+.auth-card .btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.auth-toggle {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.auth-toggle a {
+  color: var(--color-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sidebar-user {
+  font-size: 12px;
+  color: rgba(242, 244, 239, 0.65);
+  margin-bottom: 8px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-logout {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(242, 244, 239, 0.08);
+  border: none;
+  border-radius: var(--radius-md);
+  color: rgba(242, 244, 239, 0.85);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-logout:hover {
+  background: rgba(242, 244, 239, 0.15);
+}
+
+/* Relatório em PDF (Análise Individual) */
+.print-only {
+  display: none;
+}
+
+.print-header h1 {
+  font-size: 18px;
+  color: var(--color-primary);
+  margin: 0 0 8px;
+}
+
+.print-header p {
+  margin: 2px 0;
+  font-size: 13px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .sidebar {
+    display: none !important;
+  }
+
+  .content {
+    padding: 0;
+    max-width: 100%;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+    break-inside: avoid;
+  }
+}
+
 .cotacao-row {
   margin-top: 20px;
   padding-top: 16px;

@@ -61,6 +61,21 @@ export async function listarUltimosDados() {
   return porTicker
 }
 
+export async function listarDadosFinanceirosAgrupados() {
+  const { data, error } = await client()
+    .from('dados_financeiros')
+    .select('*')
+    .order('periodo', { ascending: true })
+  if (error) throw error
+
+  const porTicker = new Map()
+  for (const row of data) {
+    if (!porTicker.has(row.ticker)) porTicker.set(row.ticker, [])
+    porTicker.get(row.ticker).push(row)
+  }
+  return porTicker
+}
+
 export async function getBenchmarks() {
   const { data, error } = await client().from('benchmarks').select('*')
   if (error) throw error
@@ -71,6 +86,17 @@ export async function getBenchmarks() {
     organizado[row.subsetor][row.indicador] = row
   }
   return organizado
+}
+
+export async function atualizarBenchmark(id, campos) {
+  const { data, error } = await client()
+    .from('benchmarks')
+    .update({ ...campos, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
 }
 
 export async function salvarAnalise(analise) {

@@ -2,9 +2,11 @@ import Chart from 'chart.js/auto'
 import { pageHeader } from '../components/page-header.js'
 import { companyPicker, bindCompanyPicker } from '../components/company-picker.js'
 import { gaugeSvg } from '../components/gauge.js'
+import { trendBadge } from '../components/trend-badge.js'
 import { listarEmpresas, getDadosFinanceiros, getBenchmarks, salvarAnalise } from '../lib/database.js'
+import { getSession } from '../lib/auth.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
-import { buildIndicators, computeScore, veredictoAutomatico, formatFaixa, interpretar, healthScore } from '../lib/indicators.js'
+import { buildIndicators, computeScore, veredictoAutomatico, formatFaixa, interpretar, healthScore, compararPeriodos } from '../lib/indicators.js'
 import { formatMoeda, formatMoedaCompacta } from '../lib/format.js'
 
 const VEREDITOS = ['COMPRA', 'MANUTENÇÃO', 'VENDA']
@@ -33,19 +35,26 @@ export async function render(container, query) {
 
   let empresas
   let benchmarksPorSubsetor
+  let session
   try {
-    ;[empresas, benchmarksPorSubsetor] = await Promise.all([listarEmpresas(), getBenchmarks()])
+    ;[empresas, benchmarksPorSubsetor, session] = await Promise.all([
+      listarEmpresas(),
+      getBenchmarks(),
+      getSession(),
+    ])
   } catch (error) {
     container.querySelector('.card').innerHTML = `<p>Erro ao carregar dados: ${error.message}</p>`
     return
   }
+
+  const nomeMembro = session?.user?.user_metadata?.nome || session?.user?.email || 'Anônimo'
 
   const state = {
     empresa: null,
     periodos: [],
     periodoSelecionado: null,
     benchmarksSubsetor: null,
-    membro: '',
+    membro: nomeMembro,
     veredictoMembro: null,
     justificativa: '',
     revelado: false,
@@ -65,16 +74,25 @@ export async function render(container, query) {
     evolucaoChart = null
   }
 
+  function periodoAnteriorAoSelecionado() {
+    const idx = state.periodos.findIndex((d) => d.periodo === state.periodoSelecionado?.periodo)
+    return idx > 0 ? state.periodos[idx - 1] : null
+  }
+
   function indicadoresAtuais() {
-    return buildIndicators(state.periodoSelecionado, state.benchmarksSubsetor, {
+    const indicadores = buildIndicators(state.periodoSelecionado, state.benchmarksSubsetor, {
       preco: state.preco,
       numAcoes: state.numAcoes,
     })
+    const anterior = periodoAnteriorAoSelecionado()
+    if (!anterior) return indicadores
+    const indicadoresAnteriores = buildIndicators(anterior, state.benchmarksSubsetor)
+    return compararPeriodos(indicadores, indicadoresAnteriores)
   }
 
   function renderSearchSection() {
     return `
-      <section class="card">
+      <section class="card no-print">
         <div class="form-row">
           <div class="field">
             <label>Empresa</label>
@@ -108,15 +126,10 @@ export async function render(container, query) {
 
   function renderVeredictoForm() {
     return `
-      <section class="card">
+      <section class="card no-print">
         <h2>Antes de ver o veredito do sistema…</h2>
         <p class="muted">Registre sua própria análise. Isso ajuda a comparar seu raciocínio com o modelo quantitativo.</p>
-        <div class="form-row">
-          <div class="field">
-            <label for="membro-nome">Seu nome (opcional)</label>
-            <input id="membro-nome" type="text" value="${state.membro}" placeholder="Ex: Enrico" />
-          </div>
-        </div>
+        <p class="muted">Você: <strong>${state.membro}</strong></p>
         <div class="field">
           <label>Seu veredito</label>
           <div class="veredito-options">
@@ -148,9 +161,28 @@ export async function render(container, query) {
           <span class="dot dot-${classe}"></span>
           <span class="indicator-label">${row.label}</span>
         </div>
-        <span class="indicator-value">${valorTexto}</span>
+        <span class="indicator-value">${valorTexto}${trendBadge(row.tendencia)}</span>
         <span class="indicator-faixa muted">${formatFaixa(row.benchmark, row.unidade)}</span>
         <span class="indicator-interpretacao muted">${interpretar(row)}</span>
+      </div>`
+  }
+
+  function printHeaderHtml(dados, veredictoSistema, score, max) {
+    const agora = new Date().toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    return `
+      <div class="print-only print-header">
+        <h1>LMA Agro Analyzer — Relatório de Análise Fundamentalista</h1>
+        <p><strong>${state.empresa.ticker}</strong> — ${state.empresa.nome} · ${state.empresa.subsetor_label}</p>
+        <p>Período: ${formatPeriodo(dados.periodo)} (${dados.tipo})</p>
+        <p>Veredito do membro (${state.membro || 'Anônimo'}): <strong>${state.veredictoMembro || '—'}</strong>${state.justificativa ? ` — "${state.justificativa}"` : ''}</p>
+        <p>Veredito do sistema: <strong>${veredictoSistema}</strong> (score ${score}/${max})</p>
+        <p class="muted">Relatório gerado em ${agora}</p>
       </div>`
   }
 
@@ -162,6 +194,8 @@ export async function render(container, query) {
     const concorda = state.veredictoMembro === veredictoSistema
 
     return `
+      ${printHeaderHtml(dados, veredictoSistema, score, max)}
+
       <section class="grid-2">
         <div class="card gauge-card">
           <h2>Score do sistema</h2>
@@ -183,7 +217,7 @@ export async function render(container, query) {
         <div id="indicadores-lista">
           ${indicadores.map(indicatorRowHtml).join('')}
         </div>
-        <div class="form-row cotacao-row">
+        <div class="form-row cotacao-row no-print">
           <div class="field">
             <label for="preco-acao">Preço atual da ação (R$)</label>
             <input id="preco-acao" type="number" step="0.01" min="0" placeholder="Opcional" value="${state.preco ?? ''}" />
@@ -193,7 +227,7 @@ export async function render(container, query) {
             <input id="num-acoes" type="number" step="1" min="0" placeholder="Opcional" value="${state.numAcoes ?? ''}" />
           </div>
         </div>
-        <p class="muted">Preencha os dois campos acima para calcular P/L e P/VP com base na cotação atual.</p>
+        <p class="muted no-print">Preencha os dois campos acima para calcular P/L e P/VP com base na cotação atual.</p>
       </section>
 
       <section class="stats-grid">
@@ -209,10 +243,11 @@ export async function render(container, query) {
         <canvas id="evolucao-chart"></canvas>
       </section>
 
-      <section class="card">
+      <section class="card no-print">
         <button id="salvar-btn" class="btn btn-primary" ${state.salvo ? 'disabled' : ''}>
           ${state.salvo ? 'Análise salva ✓' : state.salvando ? 'Salvando…' : 'Salvar análise'}
         </button>
+        <button id="exportar-btn" class="btn btn-primary" style="margin-left: 8px">Exportar PDF</button>
         <span id="salvar-status" class="muted"></span>
       </section>`
   }
@@ -241,11 +276,6 @@ export async function render(container, query) {
   }
 
   function bindVeredictoForm() {
-    const nomeInput = container.querySelector('#membro-nome')
-    nomeInput.addEventListener('input', (e) => {
-      state.membro = e.target.value
-    })
-
     const justificativaInput = container.querySelector('#justificativa')
     justificativaInput.addEventListener('input', (e) => {
       state.justificativa = e.target.value
@@ -293,6 +323,8 @@ export async function render(container, query) {
   }
 
   function bindResultado() {
+    container.querySelector('#exportar-btn').addEventListener('click', () => window.print())
+
     const precoInput = container.querySelector('#preco-acao')
     precoInput.addEventListener('input', (e) => {
       state.preco = e.target.value === '' ? null : parseFloat(e.target.value)
@@ -383,7 +415,7 @@ export async function render(container, query) {
     })
   }
 
-  async function onSelectEmpresa(empresa) {
+  async function onSelectEmpresa(empresa, periodoPreferido) {
     state.empresa = empresa
     state.benchmarksSubsetor = benchmarksPorSubsetor[empresa.subsetor] || {}
     state.periodoSelecionado = null
@@ -397,7 +429,8 @@ export async function render(container, query) {
     }
 
     if (state.periodos.length) {
-      state.periodoSelecionado = state.periodos[state.periodos.length - 1]
+      const preferido = periodoPreferido && state.periodos.find((d) => d.periodo === periodoPreferido)
+      state.periodoSelecionado = preferido || state.periodos[state.periodos.length - 1]
     }
 
     draw()
@@ -411,7 +444,7 @@ export async function render(container, query) {
   }
 
   function resetVereditoState() {
-    state.membro = ''
+    state.membro = nomeMembro
     state.veredictoMembro = null
     state.justificativa = ''
     state.preco = null
@@ -421,10 +454,11 @@ export async function render(container, query) {
   }
 
   const tickerPreselecionado = query?.get('ticker')
+  const periodoPreselecionado = query?.get('periodo')
   if (tickerPreselecionado) {
     const empresa = empresas.find((e) => e.ticker === tickerPreselecionado)
     if (empresa) {
-      await onSelectEmpresa(empresa)
+      await onSelectEmpresa(empresa, periodoPreselecionado)
       return
     }
   }

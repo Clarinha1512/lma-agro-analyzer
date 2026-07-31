@@ -1,6 +1,10 @@
 import { pageHeader } from '../components/page-header.js'
-import { listarEmpresas, listarAnalises } from '../lib/database.js'
+import { listarEmpresas, listarAnalises, listarDadosFinanceirosAgrupados, getBenchmarks } from '../lib/database.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
+import { buildIndicators, computeScore, compararPeriodos } from '../lib/indicators.js'
+import { navigateTo } from '../lib/router.js'
+
+const INDICADORES_ALERTA = ['roe', 'mg', 'div']
 
 function skeleton() {
   return `
@@ -96,7 +100,75 @@ function ultimasAnalises(analises) {
     </ul>`
 }
 
-function content(empresas, analises) {
+function formatValor(valor, unidade) {
+  if (valor == null) return '—'
+  return `${valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}${unidade}`
+}
+
+function buildAlertasDePiora(empresas, dadosPorTicker, benchmarksPorSubsetor) {
+  const empresaPorTicker = new Map(empresas.map((e) => [e.ticker, e]))
+  const alertas = []
+
+  for (const [ticker, periodos] of dadosPorTicker) {
+    if (periodos.length < 2) continue
+    const empresa = empresaPorTicker.get(ticker)
+    if (!empresa) continue
+
+    const benchmarksSubsetor = benchmarksPorSubsetor[empresa.subsetor] || {}
+    const atual = periodos[periodos.length - 1]
+    const anterior = periodos[periodos.length - 2]
+
+    const indicadoresAtuais = buildIndicators(atual, benchmarksSubsetor)
+    const indicadoresAnteriores = buildIndicators(anterior, benchmarksSubsetor)
+    const comparados = compararPeriodos(indicadoresAtuais, indicadoresAnteriores)
+    const pioraram = comparados.filter((r) => r.tendencia === 'piora' && INDICADORES_ALERTA.includes(r.key))
+    if (!pioraram.length) continue
+
+    const scoreAtual = computeScore(indicadoresAtuais)
+    const scoreAnterior = computeScore(indicadoresAnteriores)
+
+    alertas.push({
+      ticker,
+      nome: empresa.nome,
+      periodo: atual.periodo,
+      pioraram,
+      scoreAtual,
+      scoreAnterior,
+    })
+  }
+
+  return alertas.sort(
+    (a, b) => a.scoreAtual.score - a.scoreAnterior.score - (b.scoreAtual.score - b.scoreAnterior.score)
+  )
+}
+
+function alertasDePioraHtml(alertas) {
+  if (!alertas.length) {
+    return `<p class="muted">Nenhuma piora detectada no período mais recente das empresas cadastradas.</p>`
+  }
+  return `
+    <ul class="alert-list">
+      ${alertas
+        .slice(0, 8)
+        .map(
+          (a) => `
+        <li class="alert-item alert-clickable" data-ticker="${a.ticker}" data-periodo="${a.periodo}">
+          <div class="alert-item-body">
+            <strong>${a.ticker}</strong> <span class="muted">· ${a.nome}</span>
+            <div class="alert-item-detail">
+              ${a.pioraram
+                .map((r) => `${r.label} piorou (${formatValor(r.valorAnterior, r.unidade)} → ${formatValor(r.valor, r.unidade)})`)
+                .join(' · ')}
+            </div>
+            <div class="alert-item-detail">Score: ${a.scoreAnterior.score}/${a.scoreAnterior.max} → ${a.scoreAtual.score}/${a.scoreAtual.max}</div>
+          </div>
+        </li>`
+        )
+        .join('')}
+    </ul>`
+}
+
+function content(empresas, analises, alertas) {
   const subsetores = new Set(empresas.map((e) => e.subsetor_label || e.subsetor)).size
   const ultima = analises[0]
     ? `${analises[0].ticker} · ${analises[0].membro || 'Anônimo'}`
@@ -108,6 +180,11 @@ function content(empresas, analises) {
       ${statCard('Subsetores', subsetores)}
       ${statCard('Análises salvas', analises.length)}
       ${statCard('Última análise', ultima)}
+    </section>
+
+    <section class="card">
+      <h2>Alertas de piora (último período vs. anterior)</h2>
+      ${alertasDePioraHtml(alertas)}
     </section>
 
     <section class="grid-2">
@@ -131,8 +208,21 @@ export async function render(container) {
   }
 
   try {
-    const [empresas, analises] = await Promise.all([listarEmpresas(), listarAnalises()])
-    container.querySelector('#dashboard-body').innerHTML = content(empresas, analises)
+    const [empresas, analises, dadosPorTicker, benchmarksPorSubsetor] = await Promise.all([
+      listarEmpresas(),
+      listarAnalises(),
+      listarDadosFinanceirosAgrupados(),
+      getBenchmarks(),
+    ])
+    const alertas = buildAlertasDePiora(empresas, dadosPorTicker, benchmarksPorSubsetor)
+    const body = container.querySelector('#dashboard-body')
+    body.innerHTML = content(empresas, analises, alertas)
+
+    body.querySelectorAll('.alert-clickable').forEach((el) => {
+      el.addEventListener('click', () => {
+        navigateTo('/analise', { ticker: el.dataset.ticker, periodo: el.dataset.periodo })
+      })
+    })
   } catch (error) {
     container.querySelector('#dashboard-body').innerHTML = errorCard(error)
   }

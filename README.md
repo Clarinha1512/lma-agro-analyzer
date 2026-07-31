@@ -32,6 +32,14 @@ npm run dev
 
 O app abre em `http://localhost:5173`.
 
+## Testes
+
+```bash
+npm test
+```
+
+Testes unitários da lógica de indicadores (`src/lib/indicators.test.js`) e testes de integração das páginas (`src/pages/*.test.js`), usando [Vitest](https://vitest.dev/) + jsdom. Não precisam de `.env` nem de conexão real com o Supabase — as chamadas ao banco são mockadas.
+
 ## Variáveis de ambiente
 
 Copie `.env.example` para `.env` e preencha:
