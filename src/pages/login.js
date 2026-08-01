@@ -12,7 +12,15 @@ export function render(container) {
     return
   }
 
-  const state = { modo: 'login', email: '', senha: '', nome: '', carregando: false, erro: null, mensagem: null }
+  const state = {
+    modo: 'login',
+    email: '',
+    senha: '',
+    nome: '',
+    carregando: false,
+    erro: null,
+    mensagem: null,
+  }
 
   function draw() {
     container.innerHTML = `

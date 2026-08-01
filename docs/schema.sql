@@ -125,10 +125,14 @@ create index idx_analises_ticker on analises(ticker);
 create table profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
   nome       text not null,
+  email      text,
+  nivel      text check (nivel in ('treinee','analista','head','diretor')) default 'treinee',
+  ativo      boolean default true,
+  entrou_em  date default current_date,
   criado_em  timestamptz default now()
 );
 
-comment on table profiles is 'Perfil de cada membro autenticado (nome de exibição)';
+comment on table profiles is 'Perfil de cada membro autenticado (nome, nível hierárquico na liga)';
 
 -- ────────────────────────────────────────────────────────────────
 --  RLS (Row Level Security)
@@ -157,3 +161,5 @@ create policy "delete autenticado analises" on analises for delete to authentica
 create policy "leitura autenticada profiles" on profiles for select to authenticated using (true);
 create policy "inserir proprio profile" on profiles for insert to authenticated with check (auth.uid() = id);
 create policy "atualizar proprio profile" on profiles for update to authenticated using (auth.uid() = id);
+create policy "diretor atualiza qualquer profile" on profiles for update to authenticated
+  using (exists (select 1 from profiles p where p.id = auth.uid() and p.nivel = 'diretor'));

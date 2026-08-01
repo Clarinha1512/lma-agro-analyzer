@@ -57,7 +57,24 @@ export async function garantirProfile(user) {
   if (existente) return existente
 
   const nome = user.user_metadata?.nome || user.email
-  const { data, error } = await client().from('profiles').insert({ id: user.id, nome }).select().single()
+  const { data, error } = await client()
+    .from('profiles')
+    .insert({ id: user.id, nome, email: user.email })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateProfile(userId, campos) {
+  const { data, error } = await client().from('profiles').update(campos).eq('id', userId).select().single()
+  if (error) throw error
+  return data
+}
+
+/** Lista todos os perfis (usado no painel de gerenciamento de membros, restrito a diretor). */
+export async function listarProfiles() {
+  const { data, error } = await client().from('profiles').select('*').order('nome')
   if (error) throw error
   return data
 }

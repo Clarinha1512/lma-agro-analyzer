@@ -4,7 +4,7 @@ import { companyPicker, bindCompanyPicker } from '../components/company-picker.j
 import { gaugeSvg } from '../components/gauge.js'
 import { trendBadge } from '../components/trend-badge.js'
 import { listarEmpresas, getDadosFinanceiros, getBenchmarks, salvarAnalise } from '../lib/database.js'
-import { getSession } from '../lib/auth.js'
+import { getSession, getProfile } from '../lib/auth.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
 import { buildIndicators, computeScore, veredictoAutomatico, formatFaixa, interpretar, healthScore, compararPeriodos } from '../lib/indicators.js'
 import { formatMoeda, formatMoedaCompacta } from '../lib/format.js'
@@ -47,7 +47,15 @@ export async function render(container, query) {
     return
   }
 
-  const nomeMembro = session?.user?.user_metadata?.nome || session?.user?.email || 'Anônimo'
+  let nomeMembro = session?.user?.email || 'Anônimo'
+  if (session?.user) {
+    try {
+      const perfil = await getProfile(session.user.id)
+      nomeMembro = perfil?.nome || nomeMembro
+    } catch {
+      // mantém o fallback (e-mail) se a busca do perfil falhar
+    }
+  }
 
   const state = {
     empresa: null,

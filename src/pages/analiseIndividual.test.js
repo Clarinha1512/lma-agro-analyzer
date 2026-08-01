@@ -18,6 +18,7 @@ const getDadosFinanceirosMock = vi.fn()
 const getBenchmarksMock = vi.fn()
 const salvarAnaliseMock = vi.fn()
 const getSessionMock = vi.fn()
+const getProfileMock = vi.fn()
 
 vi.mock('../lib/database.js', () => ({
   listarEmpresas: (...args) => listarEmpresasMock(...args),
@@ -28,6 +29,7 @@ vi.mock('../lib/database.js', () => ({
 
 vi.mock('../lib/auth.js', () => ({
   getSession: (...args) => getSessionMock(...args),
+  getProfile: (...args) => getProfileMock(...args),
 }))
 
 // Benchmarks reais do subsetor "primario" (seed.sql)
@@ -85,6 +87,7 @@ beforeEach(() => {
   getSessionMock.mockResolvedValue({
     user: { id: 'user-1', email: 'membro@liga.com', user_metadata: { nome: 'Enrico' } },
   })
+  getProfileMock.mockResolvedValue({ id: 'user-1', nome: 'Enrico', nivel: 'analista' })
 })
 
 async function renderComPreselecao() {
@@ -108,11 +111,18 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
     expect(container.querySelector('#period-select').value).toBe('2024-12')
   })
 
-  it('mostra o nome de quem está logado, sem pedir para digitar (vem da sessão autenticada)', async () => {
+  it('mostra o nome de quem está logado, sem pedir para digitar (vem do perfil, não de metadata)', async () => {
     const container = await renderComPreselecao()
 
     expect(container.textContent).toMatch(/Você:.*Enrico/s)
     expect(container.querySelector('#membro-nome')).toBeNull()
+  })
+
+  it('cai para o e-mail se a busca do perfil falhar (não trava a página)', async () => {
+    getProfileMock.mockRejectedValue(new Error('tabela profiles indisponível'))
+    const container = await renderComPreselecao()
+
+    expect(container.textContent).toMatch(/Você:.*membro@liga\.com/s)
   })
 
   it('esconde o veredito do sistema até o membro registrar o dele', async () => {
