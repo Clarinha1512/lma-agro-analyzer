@@ -3,10 +3,20 @@ import { pageHeader } from '../components/page-header.js'
 import { companyPicker, bindCompanyPicker } from '../components/company-picker.js'
 import { gaugeSvg } from '../components/gauge.js'
 import { trendBadge } from '../components/trend-badge.js'
-import { listarEmpresas, getDadosFinanceiros, getBenchmarks, salvarAnalise } from '../lib/database.js'
+import { listarEmpresas, getDadosFinanceiros, getBenchmarks, salvarAnalise, listarUltimosDados } from '../lib/database.js'
 import { getSession, getProfile } from '../lib/auth.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
-import { buildIndicators, computeScore, veredictoAutomatico, formatFaixa, interpretar, healthScore, compararPeriodos } from '../lib/indicators.js'
+import {
+  buildIndicators,
+  computeScore,
+  veredictoAutomatico,
+  formatFaixa,
+  interpretar,
+  healthScore,
+  compararPeriodos,
+  computeMedianasSubsetor,
+  comMedianaSubsetor,
+} from '../lib/indicators.js'
 import { formatMoeda, formatMoedaCompacta } from '../lib/format.js'
 
 const VEREDITOS = ['COMPRA', 'MANUTENÇÃO', 'VENDA']
@@ -36,11 +46,13 @@ export async function render(container, query) {
   let empresas
   let benchmarksPorSubsetor
   let session
+  let ultimosDadosPorTicker
   try {
-    ;[empresas, benchmarksPorSubsetor, session] = await Promise.all([
+    ;[empresas, benchmarksPorSubsetor, session, ultimosDadosPorTicker] = await Promise.all([
       listarEmpresas(),
       getBenchmarks(),
       getSession(),
+      listarUltimosDados(),
     ])
   } catch (error) {
     container.querySelector('.card').innerHTML = `<p>Erro ao carregar dados: ${error.message}</p>`
@@ -62,6 +74,8 @@ export async function render(container, query) {
     periodos: [],
     periodoSelecionado: null,
     benchmarksSubsetor: null,
+    medianasSubsetor: null,
+    peersCount: 0,
     membro: nomeMembro,
     veredictoMembro: null,
     justificativa: '',
@@ -93,9 +107,10 @@ export async function render(container, query) {
       numAcoes: state.numAcoes,
     })
     const anterior = periodoAnteriorAoSelecionado()
-    if (!anterior) return indicadores
-    const indicadoresAnteriores = buildIndicators(anterior, state.benchmarksSubsetor)
-    return compararPeriodos(indicadores, indicadoresAnteriores)
+    const comTendencia = anterior
+      ? compararPeriodos(indicadores, buildIndicators(anterior, state.benchmarksSubsetor))
+      : indicadores
+    return comMedianaSubsetor(comTendencia, state.medianasSubsetor)
   }
 
   function renderSearchSection() {
@@ -160,6 +175,12 @@ export async function render(container, query) {
       </section>`
   }
 
+  function medianaTexto(row) {
+    if (row.medianaSubsetor == null) return ''
+    const classeFavor = row.favoravel === true ? 'mediana-favoravel' : row.favoravel === false ? 'mediana-desfavoravel' : ''
+    return `<span class="indicator-mediana muted ${classeFavor}">Mediana do setor: ${formatNumero(row.medianaSubsetor)}${row.unidade}</span>`
+  }
+
   function indicatorRowHtml(row) {
     const classe = row.classe || 'neutral'
     const valorTexto = row.valor == null ? '—' : `${formatNumero(row.valor)}${row.unidade}`
@@ -170,6 +191,7 @@ export async function render(container, query) {
           <span class="indicator-label">${row.label}</span>
         </div>
         <span class="indicator-value">${valorTexto}${trendBadge(row.tendencia)}</span>
+        ${medianaTexto(row)}
         <span class="indicator-faixa muted">${formatFaixa(row.benchmark, row.unidade)}</span>
         <span class="indicator-interpretacao muted">${interpretar(row)}</span>
       </div>`
@@ -222,6 +244,7 @@ export async function render(container, query) {
 
       <section class="card">
         <h2>Indicadores fundamentalistas</h2>
+        ${state.peersCount > 1 ? `<p class="muted">Mediana calculada com ${state.peersCount} empresas do subsetor ${state.empresa.subsetor_label}.</p>` : ''}
         <div id="indicadores-lista">
           ${indicadores.map(indicatorRowHtml).join('')}
         </div>
@@ -429,6 +452,11 @@ export async function render(container, query) {
     state.periodoSelecionado = null
     state.revelado = false
     resetVereditoState()
+
+    const peers = empresas.filter((e) => e.subsetor === empresa.subsetor)
+    const dadosPeers = peers.map((e) => ultimosDadosPorTicker.get(e.ticker)).filter(Boolean)
+    state.peersCount = dadosPeers.length
+    state.medianasSubsetor = computeMedianasSubsetor(dadosPeers)
 
     try {
       state.periodos = await getDadosFinanceiros(empresa.ticker)

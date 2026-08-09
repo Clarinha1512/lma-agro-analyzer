@@ -19,12 +19,14 @@ const getBenchmarksMock = vi.fn()
 const salvarAnaliseMock = vi.fn()
 const getSessionMock = vi.fn()
 const getProfileMock = vi.fn()
+const listarUltimosDadosMock = vi.fn()
 
 vi.mock('../lib/database.js', () => ({
   listarEmpresas: (...args) => listarEmpresasMock(...args),
   getDadosFinanceiros: (...args) => getDadosFinanceirosMock(...args),
   getBenchmarks: (...args) => getBenchmarksMock(...args),
   salvarAnalise: (...args) => salvarAnaliseMock(...args),
+  listarUltimosDados: (...args) => listarUltimosDadosMock(...args),
 }))
 
 vi.mock('../lib/auth.js', () => ({
@@ -48,6 +50,16 @@ const EMPRESA_SLCE3 = {
   subsetor: 'primario',
   subsetor_label: 'Produção agrícola',
 }
+
+// Peer do mesmo subsetor, usado para testar a mediana do peer group (item 2.2).
+const EMPRESA_AGRO3 = {
+  id: 2,
+  ticker: 'AGRO3',
+  nome: 'BrasilAgro',
+  subsetor: 'primario',
+  subsetor_label: 'Produção agrícola',
+}
+const DADOS_AGRO3 = { ticker: 'AGRO3', periodo: '2024-12', roe: 13.9, margem_liq: 5.0, div_ebitda: 0.89 }
 
 // Histórico real (seed.sql): 2024 é um declínio forte vs. 2023.
 const PERIODOS_SLCE3 = [
@@ -81,9 +93,15 @@ const PERIODOS_SLCE3 = [
 
 beforeEach(() => {
   vi.clearAllMocks()
-  listarEmpresasMock.mockResolvedValue([EMPRESA_SLCE3])
+  listarEmpresasMock.mockResolvedValue([EMPRESA_SLCE3, EMPRESA_AGRO3])
   getBenchmarksMock.mockResolvedValue(BENCHMARKS_PRIMARIO)
   getDadosFinanceirosMock.mockResolvedValue(PERIODOS_SLCE3)
+  listarUltimosDadosMock.mockResolvedValue(
+    new Map([
+      ['SLCE3', PERIODOS_SLCE3[1]],
+      ['AGRO3', DADOS_AGRO3],
+    ])
+  )
   getSessionMock.mockResolvedValue({
     user: { id: 'user-1', email: 'membro@liga.com', user_metadata: { nome: 'Enrico' } },
   })
@@ -160,6 +178,18 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
     container.querySelector('#revelar-btn').click()
 
     expect(container.textContent).toMatch(/coincide com o do sistema/)
+  })
+
+  it('mostra a mediana do subsetor (peer group) ao lado de cada indicador', async () => {
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    expect(container.textContent).toMatch(/Mediana calculada com 2 empresas do subsetor Produção agrícola/)
+
+    // Mediana ROE = (6.1 da SLCE3 + 13.9 da AGRO3) / 2 = 10
+    const linhaRoe = [...container.querySelectorAll('.indicator-row')].find((el) => el.textContent.includes('ROE'))
+    expect(linhaRoe.querySelector('.indicator-mediana').textContent).toMatch(/Mediana do setor: 10%/)
   })
 
   it('mostra a seta de piora nos indicadores que caíram vs. o período anterior', async () => {

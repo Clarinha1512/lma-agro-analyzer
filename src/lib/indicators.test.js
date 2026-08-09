@@ -10,6 +10,8 @@ import {
   compararPeriodos,
   formatFaixa,
   interpretar,
+  computeMedianasSubsetor,
+  comMedianaSubsetor,
 } from './indicators.js'
 
 // Benchmarks reais do subsetor "primario" (seed.sql), usados nos testes para
@@ -268,6 +270,55 @@ describe('compararPeriodos', () => {
     const atual = buildIndicators({ roe: 15, margem_liq: 10, div_ebitda: 1 }, BENCHMARKS_PRIMARIO)
     const comparado = compararPeriodos(atual, anterior)
     expect(comparado.find((r) => r.key === 'div').tendencia).toBe('melhora')
+  })
+})
+
+describe('computeMedianasSubsetor', () => {
+  it('calcula a mediana de roe/margem/dívida entre os peers do subsetor', () => {
+    const peers = [
+      { roe: 10, margem_liq: 5, div_ebitda: 3 },
+      { roe: 20, margem_liq: 8, div_ebitda: 1 },
+      { roe: 30, margem_liq: 12, div_ebitda: 2 },
+    ]
+    const medianas = computeMedianasSubsetor(peers)
+    expect(medianas.roe).toBe(20)
+    expect(medianas.mg).toBe(8)
+    expect(medianas.div).toBe(2)
+  })
+
+  it('faz média dos dois valores centrais quando o número de peers é par', () => {
+    const peers = [{ roe: 10, margem_liq: null, div_ebitda: null }, { roe: 30, margem_liq: null, div_ebitda: null }]
+    expect(computeMedianasSubsetor(peers).roe).toBe(20)
+  })
+
+  it('ignora valores nulos e retorna null se não houver nenhum válido', () => {
+    const peers = [{ roe: null, margem_liq: null, div_ebitda: null }]
+    const medianas = computeMedianasSubsetor(peers)
+    expect(medianas.roe).toBeNull()
+    expect(medianas.mg).toBeNull()
+    expect(medianas.div).toBeNull()
+  })
+})
+
+describe('comMedianaSubsetor', () => {
+  it('marca como favorável quando o valor da empresa é melhor que a mediana', () => {
+    const indicadores = buildIndicators(
+      { roe: 20, margem_liq: 3, div_ebitda: 3.11 },
+      BENCHMARKS_PRIMARIO
+    )
+    const comMediana = comMedianaSubsetor(indicadores, { roe: 15, mg: 8, div: 1 })
+    const porChave = Object.fromEntries(comMediana.map((r) => [r.key, r]))
+
+    expect(porChave.roe.favoravel).toBe(true) // 20 > 15, não-inverso
+    expect(porChave.mg.favoravel).toBe(false) // 3 < 8, não-inverso
+    expect(porChave.div.favoravel).toBe(false) // 3.11 > 1, inverso → pior
+  })
+
+  it('não quebra quando não há mediana calculada (sem peers)', () => {
+    const indicadores = buildIndicators({ roe: 20, margem_liq: 3, div_ebitda: 3.11 }, BENCHMARKS_PRIMARIO)
+    const comMediana = comMedianaSubsetor(indicadores, { roe: null, mg: null, div: null })
+    expect(comMediana.find((r) => r.key === 'roe').medianaSubsetor).toBeNull()
+    expect(comMediana.find((r) => r.key === 'roe').favoravel).toBeUndefined()
   })
 })
 

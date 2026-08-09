@@ -535,7 +535,7 @@ textarea {
 /* Indicator rows */
 .indicator-row {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr 1.4fr 1.8fr;
+  grid-template-columns: 1.2fr 0.8fr 1fr 1.4fr 1.8fr;
   align-items: center;
   gap: 16px;
   padding: 12px 0;
@@ -598,6 +598,15 @@ textarea {
 
 .trend-estavel {
   color: var(--color-text-muted);
+}
+
+/* Mediana do subsetor (peer group) */
+.indicator-mediana.mediana-favoravel {
+  color: var(--color-ok);
+}
+
+.indicator-mediana.mediana-desfavoravel {
+  color: var(--color-danger);
 }
 
 .alert-list {

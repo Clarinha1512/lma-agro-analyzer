@@ -117,3 +117,34 @@ export function compararPeriodos(indicadoresAtuais, indicadoresAnteriores) {
     return { ...atual, tendencia, valorAnterior: anterior?.valor ?? null }
   })
 }
+
+function mediana(valores) {
+  const validos = valores.filter((v) => v != null && !Number.isNaN(v)).sort((a, b) => a - b)
+  if (!validos.length) return null
+  const meio = Math.floor(validos.length / 2)
+  return validos.length % 2 ? validos[meio] : (validos[meio - 1] + validos[meio]) / 2
+}
+
+/**
+ * Mediana do peer group (empresas do mesmo subsetor) para os indicadores que não
+ * dependem de cotação — ROE, margem líquida e dívida/EBITDA vêm prontos do banco;
+ * P/L e P/VP dependem de preço/nº de ações de cada peer, que o app não tem.
+ */
+export function computeMedianasSubsetor(dadosPeers) {
+  return {
+    roe: mediana(dadosPeers.map((d) => d.roe)),
+    mg: mediana(dadosPeers.map((d) => d.margem_liq)),
+    div: mediana(dadosPeers.map((d) => d.div_ebitda)),
+  }
+}
+
+/** Anexa a mediana do subsetor a cada indicador e se o valor da empresa é favorável frente a ela. */
+export function comMedianaSubsetor(indicadores, medianas) {
+  return indicadores.map((row) => {
+    const medianaSubsetor = medianas?.[row.key] ?? null
+    if (medianaSubsetor == null || row.valor == null) return { ...row, medianaSubsetor }
+    const inverso = row.benchmark?.inverso ?? false
+    const melhor = melhorPorValor(row.valor, medianaSubsetor, inverso)
+    return { ...row, medianaSubsetor, favoravel: melhor === 'A' ? true : melhor === 'B' ? false : null }
+  })
+}
