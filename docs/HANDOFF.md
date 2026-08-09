@@ -229,8 +229,8 @@ Para gerar próximos prompts de melhoria, vale considerar:
 O usuário colou um documento pessoal de backlog com duas partes ("1.x" = pedidos diretos do Enrico, "2.x" = sugestões adicionais). Depois de avaliar o que é gratuito/factível na arquitetura atual (client-side, sem backend próprio, Supabase free tier), chegamos a uma lista única priorizada. Status:
 
 - [x] **1.1 — Perfis dos membros.** Feito nesta sessão: tabela `profiles` estendida, hierarquia de 4 níveis (Treinee/Analista/Head/Diretor — substituiu "membro/coordenador/diretor" + área, removida a pedido do usuário), painel "Gerenciar membros" em Configurações restrito a Diretor (RLS + UI), deploy em produção confirmado.
-- [ ] **2.2 — Comparação com peer group** (mediana do subsetor). Próximo item combinado com o usuário — ainda não iniciado.
-- [ ] 2.6 — Batalha de análises (comparar vereditos de dois membros na mesma empresa/período)
+- [x] **2.2 — Comparação com peer group** (mediana do subsetor). Feito: `computeMedianasSubsetor`/`comMedianaSubsetor` em `indicators.js`, cada indicador na Análise Individual mostra a mediana do subsetor com destaque favorável/desfavorável. Deployado e verificado em produção.
+- [ ] **2.6 — Batalha de análises** (comparar vereditos de dois membros na mesma empresa/período). Próximo item — ainda não iniciado.
 - [ ] 2.12 — Exportar CSV (dados financeiros e/ou análises)
 - [ ] 2.3 — Decomposição DuPont (ROE = margem × giro × alavancagem)
 - [ ] 2.5 — Scorecard qualitativo (critérios não-numéricos, preenchidos manualmente)

@@ -33,6 +33,78 @@ const COLUNAS = [
   { key: 'concorda', label: 'Concordância' },
 ]
 
+/**
+ * Agrupa análises por empresa+período e mantém só os grupos com 2+ membros
+ * diferentes — é aí que faz sentido comparar vereditos ("batalha de análises").
+ */
+function agruparBatalhas(rows) {
+  const grupos = new Map()
+  for (const row of rows) {
+    const chave = `${row.ticker}__${row.periodo}`
+    if (!grupos.has(chave)) grupos.set(chave, [])
+    grupos.get(chave).push(row)
+  }
+
+  return [...grupos.values()]
+    .filter((grupo) => new Set(grupo.map((r) => r.membro || 'Anônimo')).size >= 2)
+    .map((grupo) => {
+      const maisRecentePrimeiro = sortRows(grupo, 'criado_em', 'desc')
+      const divergencia = new Set(grupo.map((r) => r.veredito_membro)).size > 1
+      return {
+        ticker: grupo[0].ticker,
+        nome: grupo[0].nome,
+        periodo: grupo[0].periodo,
+        veredictoSistema: grupo[0].veredito_sistema,
+        divergencia,
+        analises: maisRecentePrimeiro,
+        ultimaAtividade: maisRecentePrimeiro[0].criado_em,
+      }
+    })
+    .sort((a, b) => new Date(b.ultimaAtividade) - new Date(a.ultimaAtividade))
+}
+
+function battleCardHtml(grupo) {
+  return `
+    <div class="card battle-card" data-ticker="${grupo.ticker}" data-periodo="${grupo.periodo}">
+      <div class="battle-header">
+        <span><strong>${grupo.ticker}</strong> — ${grupo.nome} · ${grupo.periodo}</span>
+        <span class="badge badge-neutral">Sistema: ${grupo.veredictoSistema || '—'}</span>
+        <span class="badge badge-${grupo.divergencia ? 'warn' : 'ok'}">${grupo.divergencia ? 'Divergência entre membros' : 'Consenso'}</span>
+      </div>
+      <div class="battle-membros">
+        ${grupo.analises
+          .map(
+            (a) => `
+          <div class="battle-membro">
+            <span class="membro-nome">${a.membro || 'Anônimo'}</span>
+            <span class="badge badge-${veredictoBadgeClasse(a.veredito_membro)}">${a.veredito_membro || '—'}</span>
+            <span class="trend ${a.concorda ? 'trend-melhora' : 'trend-piora'}">${a.concorda ? '✓ bateu com o sistema' : '✗ divergiu do sistema'}</span>
+          </div>`
+          )
+          .join('')}
+      </div>
+    </div>`
+}
+
+function renderBatalhas(batalhas) {
+  if (!batalhas.length) {
+    return `
+      <section class="card">
+        <h2>Batalha de análises</h2>
+        <p class="muted">Ainda não há duas análises de membros diferentes para a mesma empresa/período. Assim que isso acontecer, a comparação aparece aqui.</p>
+      </section>`
+  }
+
+  return `
+    <section class="card">
+      <h2>Batalha de análises</h2>
+      <p class="muted">Empresas/períodos analisados por mais de um membro — compare quem concordou com o sistema e entre si.</p>
+      <div class="battle-list">
+        ${batalhas.map(battleCardHtml).join('')}
+      </div>
+    </section>`
+}
+
 function sortRows(rows, key, dir) {
   const factor = dir === 'asc' ? 1 : -1
   return [...rows].sort((a, b) => {
@@ -73,6 +145,8 @@ export async function render(container) {
     nome: nomePorTicker.get(a.ticker) || a.ticker,
     concorda: a.veredito_membro === a.veredito_sistema,
   }))
+
+  const batalhas = agruparBatalhas(rows)
 
   const state = {
     filtro: '',
@@ -151,6 +225,14 @@ export async function render(container) {
     })
   }
 
+  function bindBatalhaEvents() {
+    container.querySelectorAll('.battle-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        navigateTo('/analise', { ticker: card.dataset.ticker, periodo: card.dataset.periodo })
+      })
+    })
+  }
+
   function atualizarTabela() {
     container.querySelector('#tabela-container').innerHTML = renderTable()
     bindTabelaEvents()
@@ -159,6 +241,7 @@ export async function render(container) {
   function draw() {
     container.innerHTML = `
       ${pageHeader('Histórico', 'Análises registradas pelos membros da liga.')}
+      ${renderBatalhas(batalhas)}
       <section class="card table-toolbar">
         <div class="field">
           <label for="filtro-input">Buscar por ticker ou membro</label>
@@ -173,6 +256,7 @@ export async function render(container) {
     })
 
     bindTabelaEvents()
+    bindBatalhaEvents()
   }
 
   draw()
