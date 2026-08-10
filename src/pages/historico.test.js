@@ -14,6 +14,13 @@ vi.mock('../lib/database.js', () => ({
 
 vi.mock('../lib/router.js', () => ({ navigateTo: (...args) => navigateToMock(...args) }))
 
+const montarCsvMock = vi.fn(() => 'csv-fake')
+const baixarCsvMock = vi.fn()
+vi.mock('../lib/csv.js', () => ({
+  montarCsv: (...args) => montarCsvMock(...args),
+  baixarCsv: (...args) => baixarCsvMock(...args),
+}))
+
 function empresa(ticker, nome = ticker) {
   return { id: ticker, ticker, nome, subsetor: 'primario', subsetor_label: 'Produção agrícola' }
 }
@@ -116,5 +123,28 @@ describe('historico render() — Batalha de análises', () => {
     container.querySelector('.battle-card').click()
 
     expect(navigateToMock).toHaveBeenCalledWith('/analise', { ticker: 'SLCE3', periodo: '2024-12' })
+  })
+
+  it('exporta CSV com as linhas atualmente filtradas', async () => {
+    listarAnalisesMock.mockResolvedValue([
+      analise({ membro: 'Enrico', ticker: 'SLCE3' }),
+      analise({ membro: 'Maria', ticker: 'AGRO3', criado_em: '2026-08-02T10:00:00Z' }),
+    ])
+    listarEmpresasMock.mockResolvedValue([empresa('SLCE3', 'SLC Agrícola'), empresa('AGRO3', 'BrasilAgro')])
+
+    const container = document.createElement('div')
+    await render(container)
+
+    const filtroInput = container.querySelector('#filtro-input')
+    filtroInput.value = 'SLCE3'
+    filtroInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+    container.querySelector('#exportar-csv-btn').click()
+
+    expect(montarCsvMock).toHaveBeenCalledTimes(1)
+    const linhasExportadas = montarCsvMock.mock.calls[0][1]
+    expect(linhasExportadas).toHaveLength(1)
+    expect(linhasExportadas[0].ticker).toBe('SLCE3')
+    expect(baixarCsvMock).toHaveBeenCalledWith('historico-analises.csv', 'csv-fake')
   })
 })

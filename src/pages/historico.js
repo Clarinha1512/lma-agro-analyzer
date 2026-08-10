@@ -2,6 +2,19 @@ import { pageHeader, emptyState } from '../components/page-header.js'
 import { listarAnalises, listarEmpresas } from '../lib/database.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
 import { navigateTo } from '../lib/router.js'
+import { montarCsv, baixarCsv } from '../lib/csv.js'
+
+const COLUNAS_CSV = [
+  { label: 'Data', value: (r) => formatDataHora(r.criado_em) },
+  { label: 'Ticker', value: (r) => r.ticker },
+  { label: 'Empresa', value: (r) => r.nome },
+  { label: 'Período', value: (r) => r.periodo },
+  { label: 'Membro', value: (r) => r.membro || 'Anônimo' },
+  { label: 'Veredito (membro)', value: (r) => r.veredito_membro },
+  { label: 'Veredito (sistema)', value: (r) => r.veredito_sistema },
+  { label: 'Score', value: (r) => `${r.score_sistema}/${r.score_max}` },
+  { label: 'Concordância', value: (r) => (r.concorda ? 'Sim' : 'Não') },
+]
 
 function veredictoBadgeClasse(veredito) {
   if (veredito === 'COMPRA') return 'ok'
@@ -154,14 +167,18 @@ export async function render(container) {
     sortDir: 'desc',
   }
 
-  function renderTable() {
+  function linhasFiltradasOrdenadas() {
     const termo = state.filtro.trim().toLowerCase()
     const filtradas = termo
       ? rows.filter(
           (r) => r.ticker.toLowerCase().includes(termo) || (r.membro || '').toLowerCase().includes(termo)
         )
       : rows
-    const ordenadas = sortRows(filtradas, state.sortKey, state.sortDir)
+    return sortRows(filtradas, state.sortKey, state.sortDir)
+  }
+
+  function renderTable() {
+    const ordenadas = linhasFiltradasOrdenadas()
 
     if (!ordenadas.length) {
       return emptyState('Nenhuma análise encontrada.')
@@ -247,12 +264,18 @@ export async function render(container) {
           <label for="filtro-input">Buscar por ticker ou membro</label>
           <input id="filtro-input" type="text" placeholder="Ex: SLCE3 ou Enrico" value="${state.filtro}" />
         </div>
+        <button id="exportar-csv-btn" class="btn btn-primary" style="margin-top: 12px">Exportar CSV</button>
       </section>
       <div id="tabela-container">${renderTable()}</div>`
 
     container.querySelector('#filtro-input').addEventListener('input', (e) => {
       state.filtro = e.target.value
       atualizarTabela()
+    })
+
+    container.querySelector('#exportar-csv-btn').addEventListener('click', () => {
+      const csv = montarCsv(COLUNAS_CSV, linhasFiltradasOrdenadas())
+      baixarCsv('historico-analises.csv', csv)
     })
 
     bindTabelaEvents()

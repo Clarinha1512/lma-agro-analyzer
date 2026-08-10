@@ -3,6 +3,19 @@ import { listarEmpresas, listarUltimosDados, getBenchmarks } from '../lib/databa
 import { isSupabaseConfigured } from '../lib/supabase.js'
 import { buildIndicators, computeScore, veredictoAutomatico } from '../lib/indicators.js'
 import { navigateTo } from '../lib/router.js'
+import { montarCsv, baixarCsv } from '../lib/csv.js'
+
+const COLUNAS_CSV = [
+  { label: 'Ticker', value: (r) => r.ticker },
+  { label: 'Nome', value: (r) => r.nome },
+  { label: 'Subsetor', value: (r) => r.subsetor },
+  { label: 'Período', value: (r) => r.periodo },
+  { label: 'ROE (%)', value: (r) => r.roe },
+  { label: 'Margem líquida (%)', value: (r) => r.mg },
+  { label: 'Dívida/EBITDA (x)', value: (r) => r.div },
+  { label: 'Score', value: (r) => (r.score == null ? '' : `${r.score}/${r.max}`) },
+  { label: 'Veredito', value: (r) => r.veredito },
+]
 
 function formatNumero(valor, casas = 1) {
   if (valor == null) return '—'
@@ -127,12 +140,16 @@ export async function render(container) {
     return `<span class="dot dot-${classe || 'neutral'}"></span> ${valor == null ? '—' : `${formatNumero(valor)}${unidade}`}`
   }
 
-  function renderTable() {
+  function linhasFiltradasOrdenadas() {
     const filtradas =
       state.subsetorFiltro === 'todos'
         ? rows
         : rows.filter((r) => r.subsetor === state.subsetorFiltro)
-    const ordenadas = sortRows(filtradas, state.sortKey, state.sortDir)
+    return sortRows(filtradas, state.sortKey, state.sortDir)
+  }
+
+  function renderTable() {
+    const ordenadas = linhasFiltradasOrdenadas()
 
     if (!ordenadas.length) {
       return emptyState('Nenhuma empresa encontrada para este filtro.')
@@ -190,12 +207,18 @@ export async function render(container) {
               .join('')}
           </select>
         </div>
+        <button id="exportar-csv-btn" class="btn btn-primary" style="margin-top: 12px">Exportar CSV</button>
       </section>
       ${renderTable()}`
 
     container.querySelector('#subsetor-filtro').addEventListener('change', (event) => {
       state.subsetorFiltro = event.target.value
       draw()
+    })
+
+    container.querySelector('#exportar-csv-btn').addEventListener('click', () => {
+      const csv = montarCsv(COLUNAS_CSV, linhasFiltradasOrdenadas())
+      baixarCsv('ranking-empresas.csv', csv)
     })
 
     container.querySelectorAll('th.sortable').forEach((th) => {

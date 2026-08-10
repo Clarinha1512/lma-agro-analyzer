@@ -230,8 +230,8 @@ O usuário colou um documento pessoal de backlog com duas partes ("1.x" = pedido
 
 - [x] **1.1 — Perfis dos membros.** Feito nesta sessão: tabela `profiles` estendida, hierarquia de 4 níveis (Treinee/Analista/Head/Diretor — substituiu "membro/coordenador/diretor" + área, removida a pedido do usuário), painel "Gerenciar membros" em Configurações restrito a Diretor (RLS + UI), deploy em produção confirmado.
 - [x] **2.2 — Comparação com peer group** (mediana do subsetor). Feito: `computeMedianasSubsetor`/`comMedianaSubsetor` em `indicators.js`, cada indicador na Análise Individual mostra a mediana do subsetor com destaque favorável/desfavorável. Deployado e verificado em produção.
-- [ ] **2.6 — Batalha de análises** (comparar vereditos de dois membros na mesma empresa/período). Próximo item — ainda não iniciado.
-- [ ] 2.12 — Exportar CSV (dados financeiros e/ou análises)
+- [x] **2.6 — Batalha de análises.** Feito: seção nova em Histórico (`agruparBatalhas`) que agrupa análises por empresa+período e destaca casos com 2+ membros, comparando vereditos entre si e com o sistema (consenso vs. divergência). Deployado.
+- [x] **2.12 — Exportar CSV.** Feito: `src/lib/csv.js` (`montarCsv`/`baixarCsv`, separador ";" e BOM UTF-8 pro Excel abrir acentos certo) + botão "Exportar CSV" no Histórico e no Ranking, exportando as linhas atualmente filtradas/ordenadas na tela. Deployado.
 - [ ] 2.3 — Decomposição DuPont (ROE = margem × giro × alavancagem)
 - [ ] 2.5 — Scorecard qualitativo (critérios não-numéricos, preenchidos manualmente)
 - [ ] 1.2 (parcial) — CAGR, EV/EBITDA, EV/Receita
