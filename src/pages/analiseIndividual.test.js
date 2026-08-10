@@ -180,6 +180,28 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
     expect(container.textContent).toMatch(/coincide com o do sistema/)
   })
 
+  it('avisa que falta "ativos totais" quando o período não tem esse dado (DuPont)', async () => {
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    expect(container.textContent).toMatch(/Preencha "Ativos totais" deste período em Adicionar Dados/)
+  })
+
+  it('mostra a decomposição DuPont quando o período tem "ativos totais" preenchido', async () => {
+    getDadosFinanceirosMock.mockResolvedValue([
+      ...PERIODOS_SLCE3.slice(0, 1),
+      { ...PERIODOS_SLCE3[1], ativos_totais: 12_000_000_000 },
+    ])
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    expect(container.textContent).toMatch(/ROE = Margem líquida × Giro de ativos × Alavancagem/)
+    // 3,0% (margem) × 0,799x (giro = 9,59bi/12bi) × 2,258x (alavancagem = 12bi/5,315bi) ≈ 5,4%
+    expect(container.querySelector('.dupont-resultado').textContent).toMatch(/5,4%/)
+  })
+
   it('mostra a mediana do subsetor (peer group) ao lado de cada indicador', async () => {
     const container = await renderComPreselecao()
     selecionarVeredito(container, 'VENDA')

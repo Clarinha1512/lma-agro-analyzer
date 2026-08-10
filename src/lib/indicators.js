@@ -138,6 +138,22 @@ export function computeMedianasSubsetor(dadosPeers) {
   }
 }
 
+/**
+ * Decomposição DuPont: ROE = Margem líquida × Giro de ativos × Alavancagem.
+ * Exige `ativos_totais`, preenchido manualmente em Adicionar Dados — sem ele,
+ * não dá pra separar giro de alavancagem, então retorna null.
+ */
+export function computeDuPont(dados) {
+  const { receita, margem_liq, pl, ativos_totais } = dados
+  if (!ativos_totais || !pl || !receita || margem_liq == null) return null
+
+  const giroAtivos = receita / ativos_totais
+  const alavancagem = ativos_totais / pl
+  const roeCalculado = margem_liq * giroAtivos * alavancagem
+
+  return { margemLiquida: margem_liq, giroAtivos, alavancagem, roeCalculado }
+}
+
 /** Anexa a mediana do subsetor a cada indicador e se o valor da empresa é favorável frente a ela. */
 export function comMedianaSubsetor(indicadores, medianas) {
   return indicadores.map((row) => {

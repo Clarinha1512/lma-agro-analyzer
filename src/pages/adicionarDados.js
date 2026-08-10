@@ -56,6 +56,7 @@ export async function render(container) {
     ebitda: null,
     dividaLiquida: null,
     patrimonioLiquido: null,
+    ativosTotais: null,
     salvando: false,
     salvo: false,
     erroSalvar: null,
@@ -105,7 +106,12 @@ export async function render(container) {
             <label for="pl-input">Patrimônio líquido (R$)</label>
             <input id="pl-input" type="number" step="0.01" value="${state.patrimonioLiquido ?? ''}" />
           </div>
+          <div class="field">
+            <label for="ativos-input">Ativos totais (R$) — opcional</label>
+            <input id="ativos-input" type="number" step="0.01" value="${state.ativosTotais ?? ''}" />
+          </div>
         </div>
+        <p class="muted">Ativos totais é usado só na decomposição DuPont (Análise Individual). Sem esse campo, o resto dos indicadores funciona normalmente.</p>
 
         <div class="stats-grid">
           <div class="card stat-card"><span class="stat-label">Margem líquida</span><span class="stat-value">${formatDerivado(derivados.margemLiq, '%')}</span></div>
@@ -144,6 +150,7 @@ export async function render(container) {
       ['ebitda-input', 'ebitda'],
       ['divida-input', 'dividaLiquida'],
       ['pl-input', 'patrimonioLiquido'],
+      ['ativos-input', 'ativosTotais'],
     ]
     camposNumericos.forEach(([id, campo]) => {
       container.querySelector(`#${id}`).addEventListener('input', (e) => {
@@ -188,6 +195,7 @@ export async function render(container) {
         ebitda: state.ebitda,
         divida_liq: state.dividaLiquida,
         pl: state.patrimonioLiquido,
+        ativos_totais: state.ativosTotais,
         margem_liq: derivados.margemLiq,
         roe: derivados.roe,
         div_ebitda: derivados.divEbitda,

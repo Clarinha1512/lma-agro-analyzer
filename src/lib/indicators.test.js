@@ -12,6 +12,7 @@ import {
   interpretar,
   computeMedianasSubsetor,
   comMedianaSubsetor,
+  computeDuPont,
 } from './indicators.js'
 
 // Benchmarks reais do subsetor "primario" (seed.sql), usados nos testes para
@@ -319,6 +320,30 @@ describe('comMedianaSubsetor', () => {
     const comMediana = comMedianaSubsetor(indicadores, { roe: null, mg: null, div: null })
     expect(comMediana.find((r) => r.key === 'roe').medianaSubsetor).toBeNull()
     expect(comMediana.find((r) => r.key === 'roe').favoravel).toBeUndefined()
+  })
+})
+
+describe('computeDuPont', () => {
+  it('decompõe o ROE em margem × giro de ativos × alavancagem', () => {
+    // Receita 9.590.000.000, margem 3,0%, PL 5.315.000.000, ativos totais 12.000.000.000 (SLCE3 2024, hipotético)
+    const dados = { receita: 9_590_000_000, margem_liq: 3.0, pl: 5_315_000_000, ativos_totais: 12_000_000_000 }
+    const dupont = computeDuPont(dados)
+
+    expect(dupont.margemLiquida).toBe(3.0)
+    expect(dupont.giroAtivos).toBeCloseTo(0.799, 2) // receita / ativos
+    expect(dupont.alavancagem).toBeCloseTo(2.258, 2) // ativos / PL
+    // ROE calculado deve bater com margem × giro × alavancagem
+    expect(dupont.roeCalculado).toBeCloseTo(3.0 * dupont.giroAtivos * dupont.alavancagem, 5)
+  })
+
+  it('retorna null quando falta "ativos_totais" (campo opcional, preenchido manualmente)', () => {
+    const dados = { receita: 9_590_000_000, margem_liq: 3.0, pl: 5_315_000_000, ativos_totais: null }
+    expect(computeDuPont(dados)).toBeNull()
+  })
+
+  it('retorna null quando falta patrimônio líquido ou receita', () => {
+    expect(computeDuPont({ receita: null, margem_liq: 3, pl: 100, ativos_totais: 200 })).toBeNull()
+    expect(computeDuPont({ receita: 100, margem_liq: 3, pl: null, ativos_totais: 200 })).toBeNull()
   })
 })
 

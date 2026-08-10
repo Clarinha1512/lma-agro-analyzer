@@ -16,6 +16,7 @@ import {
   compararPeriodos,
   computeMedianasSubsetor,
   comMedianaSubsetor,
+  computeDuPont,
 } from '../lib/indicators.js'
 import { formatMoeda, formatMoedaCompacta } from '../lib/format.js'
 
@@ -197,6 +198,45 @@ export async function render(container, query) {
       </div>`
   }
 
+  function dupontHtml(dados) {
+    const dupont = computeDuPont(dados)
+    if (!dupont) {
+      return `
+        <section class="card">
+          <h2>Decomposição DuPont</h2>
+          <p class="muted">Preencha "Ativos totais" deste período em Adicionar Dados para ver de onde vem o ROE (margem × giro de ativos × alavancagem).</p>
+        </section>`
+    }
+
+    return `
+      <section class="card">
+        <h2>Decomposição DuPont</h2>
+        <p class="muted">ROE = Margem líquida × Giro de ativos × Alavancagem financeira.</p>
+        <div class="dupont-formula">
+          <div class="dupont-fator">
+            <span class="dupont-valor">${formatNumero(dupont.margemLiquida)}%</span>
+            <span class="muted">Margem líquida</span>
+          </div>
+          <span class="dupont-op">×</span>
+          <div class="dupont-fator">
+            <span class="dupont-valor">${formatNumero(dupont.giroAtivos, 2)}x</span>
+            <span class="muted">Giro de ativos</span>
+          </div>
+          <span class="dupont-op">×</span>
+          <div class="dupont-fator">
+            <span class="dupont-valor">${formatNumero(dupont.alavancagem, 2)}x</span>
+            <span class="muted">Alavancagem</span>
+          </div>
+          <span class="dupont-op">=</span>
+          <div class="dupont-fator dupont-resultado">
+            <span class="dupont-valor">${formatNumero(dupont.roeCalculado)}%</span>
+            <span class="muted">ROE (DuPont)</span>
+          </div>
+        </div>
+        <p class="muted">ROE informado no período: ${formatNumero(dados.roe)}%. Pequenas diferenças em relação ao ROE calculado aqui são normais (ex: patrimônio líquido médio vs. final).</p>
+      </section>`
+  }
+
   function printHeaderHtml(dados, veredictoSistema, score, max) {
     const agora = new Date().toLocaleString('pt-BR', {
       day: '2-digit',
@@ -260,6 +300,8 @@ export async function render(container, query) {
         </div>
         <p class="muted no-print">Preencha os dois campos acima para calcular P/L e P/VP com base na cotação atual.</p>
       </section>
+
+      ${dupontHtml(dados)}
 
       <section class="stats-grid">
         <div class="card stat-card"><span class="stat-label">Receita</span><span class="stat-value" title="${formatMoeda(dados.receita)}">${formatMoedaCompacta(dados.receita)}</span></div>

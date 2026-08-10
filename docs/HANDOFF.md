@@ -232,7 +232,7 @@ O usuário colou um documento pessoal de backlog com duas partes ("1.x" = pedido
 - [x] **2.2 — Comparação com peer group** (mediana do subsetor). Feito: `computeMedianasSubsetor`/`comMedianaSubsetor` em `indicators.js`, cada indicador na Análise Individual mostra a mediana do subsetor com destaque favorável/desfavorável. Deployado e verificado em produção.
 - [x] **2.6 — Batalha de análises.** Feito: seção nova em Histórico (`agruparBatalhas`) que agrupa análises por empresa+período e destaca casos com 2+ membros, comparando vereditos entre si e com o sistema (consenso vs. divergência). Deployado.
 - [x] **2.12 — Exportar CSV.** Feito: `src/lib/csv.js` (`montarCsv`/`baixarCsv`, separador ";" e BOM UTF-8 pro Excel abrir acentos certo) + botão "Exportar CSV" no Histórico e no Ranking, exportando as linhas atualmente filtradas/ordenadas na tela. Deployado.
-- [ ] 2.3 — Decomposição DuPont (ROE = margem × giro × alavancagem)
+- [x] **2.3 — Decomposição DuPont.** Feito: `computeDuPont` em `indicators.js` (ROE = margem líquida × giro de ativos × alavancagem), novo campo opcional "Ativos totais" em Adicionar Dados (`dados_financeiros.ativos_totais`, nullable — período sem esse dado só mostra aviso, resto do app funciona normal), seção "Decomposição DuPont" na Análise Individual. Deployado.
 - [ ] 2.5 — Scorecard qualitativo (critérios não-numéricos, preenchidos manualmente)
 - [ ] 1.2 (parcial) — CAGR, EV/EBITDA, EV/Receita
 - [ ] 2.1 — DCF simplificado

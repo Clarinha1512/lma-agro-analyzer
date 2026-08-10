@@ -50,6 +50,7 @@ create table dados_financeiros (
   divida_liq     numeric,
   caixa          numeric,
   pl             numeric,                      -- patrimônio líquido
+  ativos_totais  numeric,                      -- usado na decomposição DuPont (giro de ativos, alavancagem)
   capex          numeric,
 
   -- Indicadores calculados (%)
