@@ -643,6 +643,14 @@ textarea {
   font-weight: 500;
 }
 
+/* Scorecard qualitativo */
+.qualitativo-resumo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 /* Decomposição DuPont */
 .dupont-formula {
   display: flex;

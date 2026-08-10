@@ -112,6 +112,11 @@ create table analises (
   score_sistema     int,
   score_max         int,
 
+  -- Scorecard qualitativo (opcional): notas 1-5 de governança, gestão, posição
+  -- competitiva e riscos regulatórios/climáticos + observações livres. Não
+  -- entra no score automático, é só o julgamento subjetivo do membro.
+  scorecard_qualitativo jsonb,
+
   criado_em         timestamptz default now()
 );
 

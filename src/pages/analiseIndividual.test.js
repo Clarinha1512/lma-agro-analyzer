@@ -278,4 +278,58 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
       })
     )
   })
+
+  it('inclui o scorecard qualitativo preenchido ao salvar, e mostra o resumo depois de revelar', async () => {
+    salvarAnaliseMock.mockResolvedValue({ id: 1 })
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'COMPRA')
+
+    const governancaSelect = container.querySelector('#qual-governanca')
+    governancaSelect.value = '4'
+    governancaSelect.dispatchEvent(new Event('change', { bubbles: true }))
+
+    const observacoesInput = container.querySelector('#qual-observacoes')
+    observacoesInput.value = 'Boa gestão de risco climático'
+    observacoesInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+    container.querySelector('#revelar-btn').click()
+
+    expect(container.textContent).toMatch(/Seu scorecard qualitativo/)
+    expect(container.textContent).toMatch(/Governança: 4\/5/)
+
+    container.querySelector('#salvar-btn').click()
+
+    await vi.waitFor(() => {
+      expect(salvarAnaliseMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(salvarAnaliseMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scorecard_qualitativo: {
+          governanca: 4,
+          gestao: null,
+          posicaoCompetitiva: null,
+          riscos: null,
+          observacoes: 'Boa gestão de risco climático',
+        },
+      })
+    )
+  })
+
+  it('envia scorecard_qualitativo como null e não mostra resumo quando nada é preenchido', async () => {
+    salvarAnaliseMock.mockResolvedValue({ id: 2 })
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    expect(container.querySelector('.qualitativo-resumo')).toBeNull()
+
+    container.querySelector('#salvar-btn').click()
+
+    await vi.waitFor(() => {
+      expect(salvarAnaliseMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(salvarAnaliseMock).toHaveBeenCalledWith(expect.objectContaining({ scorecard_qualitativo: null }))
+  })
 })

@@ -22,6 +22,13 @@ import { formatMoeda, formatMoedaCompacta } from '../lib/format.js'
 
 const VEREDITOS = ['COMPRA', 'MANUTENÇÃO', 'VENDA']
 
+const CRITERIOS_QUALITATIVOS = [
+  { key: 'governanca', label: 'Governança' },
+  { key: 'gestao', label: 'Qualidade da gestão' },
+  { key: 'posicaoCompetitiva', label: 'Posição competitiva' },
+  { key: 'riscos', label: 'Riscos regulatórios/climáticos' },
+]
+
 function formatPeriodo(periodo) {
   const [ano, mes] = periodo.split('-')
   return `${mes}/${ano}`
@@ -80,6 +87,7 @@ export async function render(container, query) {
     membro: nomeMembro,
     veredictoMembro: null,
     justificativa: '',
+    scorecard: { governanca: null, gestao: null, posicaoCompetitiva: null, riscos: null, observacoes: '' },
     revelado: false,
     preco: null,
     numAcoes: null,
@@ -173,6 +181,41 @@ export async function render(container, query) {
         <button id="revelar-btn" class="btn btn-primary" ${state.veredictoMembro ? '' : 'disabled'}>
           Revelar veredito do sistema
         </button>
+      </section>
+
+      <section class="card no-print">
+        <h2>Scorecard qualitativo (opcional)</h2>
+        <p class="muted">Notas de 1 (fraco) a 5 (forte) sobre fatores que não aparecem no balanço. Não entra no score automático — fica só como registro do seu julgamento.</p>
+        <div class="form-row">
+          ${CRITERIOS_QUALITATIVOS.map(
+            (c) => `
+            <div class="field">
+              <label for="qual-${c.key}">${c.label}</label>
+              <select id="qual-${c.key}" data-criterio="${c.key}">
+                <option value="">—</option>
+                ${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${state.scorecard[c.key] === n ? 'selected' : ''}>${n}</option>`).join('')}
+              </select>
+            </div>`
+          ).join('')}
+        </div>
+        <div class="field">
+          <label for="qual-observacoes">Observações</label>
+          <textarea id="qual-observacoes" rows="2" placeholder="Algo que os números não mostram?">${state.scorecard.observacoes}</textarea>
+        </div>
+      </section>`
+  }
+
+  function scorecardResumoHtml() {
+    const preenchidos = CRITERIOS_QUALITATIVOS.filter((c) => state.scorecard[c.key] != null)
+    if (!preenchidos.length && !state.scorecard.observacoes.trim()) return ''
+
+    return `
+      <section class="card">
+        <h2>Seu scorecard qualitativo</h2>
+        <div class="qualitativo-resumo">
+          ${preenchidos.map((c) => `<span class="badge badge-neutral">${c.label}: ${state.scorecard[c.key]}/5</span>`).join('')}
+        </div>
+        ${state.scorecard.observacoes.trim() ? `<p class="muted">"${state.scorecard.observacoes.trim()}"</p>` : ''}
       </section>`
   }
 
@@ -282,6 +325,8 @@ export async function render(container, query) {
         </div>
       </section>
 
+      ${scorecardResumoHtml()}
+
       <section class="card">
         <h2>Indicadores fundamentalistas</h2>
         ${state.peersCount > 1 ? `<p class="muted">Mediana calculada com ${state.peersCount} empresas do subsetor ${state.empresa.subsetor_label}.</p>` : ''}
@@ -366,6 +411,16 @@ export async function render(container, query) {
       state.revelado = true
       draw()
     })
+
+    CRITERIOS_QUALITATIVOS.forEach((c) => {
+      container.querySelector(`#qual-${c.key}`).addEventListener('change', (e) => {
+        state.scorecard[c.key] = e.target.value === '' ? null : parseInt(e.target.value, 10)
+      })
+    })
+
+    container.querySelector('#qual-observacoes').addEventListener('input', (e) => {
+      state.scorecard.observacoes = e.target.value
+    })
   }
 
   function atualizarIndicadoresView() {
@@ -427,6 +482,7 @@ export async function render(container, query) {
           veredito_sistema: veredictoSistema,
           score_sistema: score,
           score_max: max,
+          scorecard_qualitativo: scorecardParaSalvar(),
         })
         state.salvando = false
         state.salvo = true
@@ -439,6 +495,18 @@ export async function render(container, query) {
         statusEl.textContent = `Erro: ${error.message}`
       }
     })
+  }
+
+  function scorecardParaSalvar() {
+    const algumPreenchido =
+      CRITERIOS_QUALITATIVOS.some((c) => state.scorecard[c.key] != null) || state.scorecard.observacoes.trim()
+    if (!algumPreenchido) return null
+
+    const obj = { observacoes: state.scorecard.observacoes.trim() || null }
+    CRITERIOS_QUALITATIVOS.forEach((c) => {
+      obj[c.key] = state.scorecard[c.key]
+    })
+    return obj
   }
 
   function initCharts() {
@@ -525,6 +593,7 @@ export async function render(container, query) {
     state.membro = nomeMembro
     state.veredictoMembro = null
     state.justificativa = ''
+    state.scorecard = { governanca: null, gestao: null, posicaoCompetitiva: null, riscos: null, observacoes: '' }
     state.preco = null
     state.numAcoes = null
     state.salvando = false
