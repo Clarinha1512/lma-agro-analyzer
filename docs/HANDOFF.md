@@ -234,7 +234,7 @@ O usuário colou um documento pessoal de backlog com duas partes ("1.x" = pedido
 - [x] **2.12 — Exportar CSV.** Feito: `src/lib/csv.js` (`montarCsv`/`baixarCsv`, separador ";" e BOM UTF-8 pro Excel abrir acentos certo) + botão "Exportar CSV" no Histórico e no Ranking, exportando as linhas atualmente filtradas/ordenadas na tela. Deployado.
 - [x] **2.3 — Decomposição DuPont.** Feito: `computeDuPont` em `indicators.js` (ROE = margem líquida × giro de ativos × alavancagem), novo campo opcional "Ativos totais" em Adicionar Dados (`dados_financeiros.ativos_totais`, nullable — período sem esse dado só mostra aviso, resto do app funciona normal), seção "Decomposição DuPont" na Análise Individual. Deployado.
 - [x] **2.5 — Scorecard qualitativo.** Feito: seção opcional na Análise Individual com 4 critérios (Governança, Qualidade da gestão, Posição competitiva, Riscos regulatórios/climáticos) notados 1-5 + observações livres, salvos em `analises.scorecard_qualitativo` (jsonb). Não entra no score/veredito automático — é só registro subjetivo do membro, mostrado como resumo após revelar. Deployado.
-- [ ] 1.2 (parcial) — CAGR, EV/EBITDA, EV/Receita
+- [x] **1.2 (parcial) — CAGR, EV/EBITDA, EV/Receita.** Feito: `computeCagr`/`computeEvMultiplos` em `indicators.js`, seção "Crescimento & Múltiplos (EV)" na Análise Individual. CAGR usa só receita/lucro já existentes (primeiro vs. último período cadastrado); EV/EBITDA e EV/Receita reaproveitam preço + nº de ações (mesmos campos do P/L), sem precisar de dado novo no banco. Deployado.
 - [ ] 2.1 — DCF simplificado
 - [ ] 1.3 — Expandir número de empresas cobertas
 - [ ] 1.6 — Relatório PDF institucional (além do `window.print()` atual, algo com identidade visual própria)

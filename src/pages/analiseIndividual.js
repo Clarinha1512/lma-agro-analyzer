@@ -17,6 +17,8 @@ import {
   computeMedianasSubsetor,
   comMedianaSubsetor,
   computeDuPont,
+  computeCagr,
+  computeEvMultiplos,
 } from '../lib/indicators.js'
 import { formatMoeda, formatMoedaCompacta } from '../lib/format.js'
 
@@ -280,6 +282,45 @@ export async function render(container, query) {
       </section>`
   }
 
+  function crescimentoMultiplosBodyHtml(dados) {
+    const cagr = computeCagr(state.periodos)
+    const evMultiplos = computeEvMultiplos(dados, { preco: state.preco, numAcoes: state.numAcoes })
+    const sufixoCagr = cagr ? ` (${cagr.anos.toFixed(1)} anos)` : ''
+
+    return `
+      <div class="stats-grid">
+        <div class="card stat-card">
+          <span class="stat-label">CAGR Receita${sufixoCagr}</span>
+          <span class="stat-value">${cagr?.receita != null ? `${formatNumero(cagr.receita)}%` : '—'}</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">CAGR Lucro${sufixoCagr}</span>
+          <span class="stat-value">${cagr?.lucro != null ? `${formatNumero(cagr.lucro)}%` : '—'}</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">EV/EBITDA</span>
+          <span class="stat-value">${evMultiplos?.evEbitda != null ? `${formatNumero(evMultiplos.evEbitda, 2)}x` : '—'}</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">EV/Receita</span>
+          <span class="stat-value">${evMultiplos?.evReceita != null ? `${formatNumero(evMultiplos.evReceita, 2)}x` : '—'}</span>
+        </div>
+      </div>
+      <p class="muted no-print">
+        ${!cagr ? 'CAGR precisa de pelo menos 2 períodos cadastrados (com receita/lucro positivos nos extremos) para esta empresa. ' : ''}
+        ${!evMultiplos ? 'Preencha preço da ação e nº de ações (na seção de indicadores acima) para calcular EV/EBITDA e EV/Receita.' : ''}
+      </p>`
+  }
+
+  function crescimentoMultiplosHtml(dados) {
+    return `
+      <section class="card">
+        <h2>Crescimento &amp; Múltiplos (EV)</h2>
+        <p class="muted">EV (Enterprise Value) = valor de mercado + dívida líquida — diferente do P/L, considera a alavancagem da empresa.</p>
+        <div id="crescimento-multiplos-body">${crescimentoMultiplosBodyHtml(dados)}</div>
+      </section>`
+  }
+
   function printHeaderHtml(dados, veredictoSistema, score, max) {
     const agora = new Date().toLocaleString('pt-BR', {
       day: '2-digit',
@@ -347,6 +388,8 @@ export async function render(container, query) {
       </section>
 
       ${dupontHtml(dados)}
+
+      ${crescimentoMultiplosHtml(dados)}
 
       <section class="stats-grid">
         <div class="card stat-card"><span class="stat-label">Receita</span><span class="stat-value" title="${formatMoeda(dados.receita)}">${formatMoedaCompacta(dados.receita)}</span></div>
@@ -445,6 +488,11 @@ export async function render(container, query) {
     if (radarChart) {
       radarChart.data.datasets[0].data = indicadores.map(healthScore)
       radarChart.update()
+    }
+
+    const crescimentoBody = container.querySelector('#crescimento-multiplos-body')
+    if (crescimentoBody) {
+      crescimentoBody.innerHTML = crescimentoMultiplosBodyHtml(state.periodoSelecionado)
     }
 
     return { score, max, veredictoSistema }

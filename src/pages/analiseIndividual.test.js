@@ -202,6 +202,38 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
     expect(container.querySelector('.dupont-resultado').textContent).toMatch(/5,4%/)
   })
 
+  it('mostra o CAGR de receita e lucro entre o primeiro e o último período cadastrado', async () => {
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    // Receita: 7,2bi (2023) → 9,59bi (2024), 1 ano → CAGR ≈ 33,2%
+    // Lucro: 850mi (2023) → 290,6mi (2024), 1 ano → CAGR ≈ -65,8%
+    expect(container.textContent).toMatch(/CAGR Receita \(1[.,]0 anos\)/)
+    expect(container.textContent).toMatch(/33[.,]2%/)
+    expect(container.textContent).toMatch(/-65[.,]8%/)
+  })
+
+  it('calcula EV/EBITDA e EV/Receita ao vivo quando preço e nº de ações são preenchidos', async () => {
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    expect(container.textContent).toMatch(/Preencha preço da ação e nº de ações/)
+
+    const precoInput = container.querySelector('#preco-acao')
+    precoInput.value = '20'
+    precoInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+    const numAcoesInput = container.querySelector('#num-acoes')
+    numAcoesInput.value = '500000000'
+    numAcoesInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+    // EV = 20 * 500mi + 6,347bi (dívida líq.) = 16,347bi → EV/EBITDA ≈ 8,02x, EV/Receita ≈ 1,70x
+    expect(container.textContent).toMatch(/8[.,]02x/)
+    expect(container.textContent).toMatch(/1[.,]7x/)
+  })
+
   it('mostra a mediana do subsetor (peer group) ao lado de cada indicador', async () => {
     const container = await renderComPreselecao()
     selecionarVeredito(container, 'VENDA')

@@ -154,6 +154,54 @@ export function computeDuPont(dados) {
   return { margemLiquida: margem_liq, giroAtivos, alavancagem, roeCalculado }
 }
 
+function anosEntrePeriodos(periodoInicial, periodoFinal) {
+  const [anoIni, mesIni] = periodoInicial.split('-').map(Number)
+  const [anoFim, mesFim] = periodoFinal.split('-').map(Number)
+  return (anoFim * 12 + mesFim - (anoIni * 12 + mesIni)) / 12
+}
+
+function cagrEntre(valorInicial, valorFinal, anos) {
+  if (valorInicial == null || valorFinal == null || valorInicial <= 0 || valorFinal <= 0) return null
+  return (Math.pow(valorFinal / valorInicial, 1 / anos) - 1) * 100
+}
+
+/**
+ * CAGR (taxa de crescimento anual composta) de receita e lucro entre o primeiro
+ * e o último período cadastrado. Não é definido quando falta pelo menos ~1 ano
+ * de intervalo, ou quando algum dos extremos é zero/negativo (prejuízo).
+ */
+export function computeCagr(periodos) {
+  if (!periodos || periodos.length < 2) return null
+  const ordenados = [...periodos].sort((a, b) => a.periodo.localeCompare(b.periodo))
+  const primeiro = ordenados[0]
+  const ultimo = ordenados[ordenados.length - 1]
+
+  const anos = anosEntrePeriodos(primeiro.periodo, ultimo.periodo)
+  if (!anos || anos < 0.5) return null
+
+  return {
+    anos,
+    receita: cagrEntre(primeiro.receita, ultimo.receita, anos),
+    lucro: cagrEntre(primeiro.lucro, ultimo.lucro, anos),
+  }
+}
+
+/**
+ * Múltiplos baseados em Enterprise Value (valor de mercado + dívida líquida) —
+ * ao contrário do P/L, considera a alavancagem, o que importa bastante no agro.
+ * Exige preço da ação e nº de ações, como P/L e P/VP.
+ */
+export function computeEvMultiplos(dados, { preco, numAcoes } = {}) {
+  if (preco == null || !numAcoes) return null
+  const valorMercado = preco * numAcoes
+  const ev = valorMercado + (dados.divida_liq ?? 0)
+  return {
+    ev,
+    evEbitda: dados.ebitda ? ev / dados.ebitda : null,
+    evReceita: dados.receita ? ev / dados.receita : null,
+  }
+}
+
 /** Anexa a mediana do subsetor a cada indicador e se o valor da empresa é favorável frente a ela. */
 export function comMedianaSubsetor(indicadores, medianas) {
   return indicadores.map((row) => {

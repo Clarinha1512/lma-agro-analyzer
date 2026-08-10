@@ -13,6 +13,8 @@ import {
   computeMedianasSubsetor,
   comMedianaSubsetor,
   computeDuPont,
+  computeCagr,
+  computeEvMultiplos,
 } from './indicators.js'
 
 // Benchmarks reais do subsetor "primario" (seed.sql), usados nos testes para
@@ -344,6 +346,67 @@ describe('computeDuPont', () => {
   it('retorna null quando falta patrimônio líquido ou receita', () => {
     expect(computeDuPont({ receita: null, margem_liq: 3, pl: 100, ativos_totais: 200 })).toBeNull()
     expect(computeDuPont({ receita: 100, margem_liq: 3, pl: null, ativos_totais: 200 })).toBeNull()
+  })
+})
+
+describe('computeCagr', () => {
+  it('calcula o CAGR de receita e lucro entre o primeiro e o último período', () => {
+    const periodos = [
+      { periodo: '2022-12', receita: 100, lucro: 10 },
+      { periodo: '2024-12', receita: 121, lucro: 12.1 },
+    ]
+    const cagr = computeCagr(periodos)
+    expect(cagr.anos).toBe(2)
+    expect(cagr.receita).toBeCloseTo(10, 5) // (121/100)^(1/2) - 1 = 10%
+    expect(cagr.lucro).toBeCloseTo(10, 5)
+  })
+
+  it('ordena os períodos antes de calcular, mesmo se vierem fora de ordem', () => {
+    const periodos = [
+      { periodo: '2024-12', receita: 121, lucro: 12.1 },
+      { periodo: '2022-12', receita: 100, lucro: 10 },
+    ]
+    expect(computeCagr(periodos).receita).toBeCloseTo(10, 5)
+  })
+
+  it('retorna null com menos de 2 períodos', () => {
+    expect(computeCagr([{ periodo: '2024-12', receita: 100, lucro: 10 }])).toBeNull()
+    expect(computeCagr([])).toBeNull()
+  })
+
+  it('retorna null pro indicador quando prejuízo (valor não-positivo) em algum extremo', () => {
+    const periodos = [
+      { periodo: '2022-12', receita: 100, lucro: -5 },
+      { periodo: '2024-12', receita: 121, lucro: 12.1 },
+    ]
+    const cagr = computeCagr(periodos)
+    expect(cagr.receita).toBeCloseTo(10, 5)
+    expect(cagr.lucro).toBeNull()
+  })
+})
+
+describe('computeEvMultiplos', () => {
+  it('calcula EV/EBITDA e EV/Receita a partir de preço e nº de ações', () => {
+    const dados = { divida_liq: 6_347_000_000, ebitda: 2_039_000_000, receita: 9_590_000_000 }
+    const multiplos = computeEvMultiplos(dados, { preco: 20, numAcoes: 500_000_000 })
+
+    // EV = 20 * 500.000.000 + 6.347.000.000 = 16.347.000.000
+    expect(multiplos.ev).toBe(16_347_000_000)
+    expect(multiplos.evEbitda).toBeCloseTo(8.02, 2)
+    expect(multiplos.evReceita).toBeCloseTo(1.7, 2)
+  })
+
+  it('retorna null sem preço ou sem nº de ações', () => {
+    const dados = { divida_liq: 100, ebitda: 100, receita: 100 }
+    expect(computeEvMultiplos(dados, { preco: null, numAcoes: 500 })).toBeNull()
+    expect(computeEvMultiplos(dados, { preco: 20, numAcoes: null })).toBeNull()
+    expect(computeEvMultiplos(dados, {})).toBeNull()
+  })
+
+  it('trata dívida líquida ausente como zero (empresa sem dado de dívida)', () => {
+    const dados = { divida_liq: null, ebitda: 100, receita: 200 }
+    const multiplos = computeEvMultiplos(dados, { preco: 10, numAcoes: 10 })
+    expect(multiplos.ev).toBe(100) // só valor de mercado
   })
 })
 
