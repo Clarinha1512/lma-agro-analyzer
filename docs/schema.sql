@@ -48,7 +48,7 @@ create table dados_financeiros (
   resultado_op   numeric,
   divida_bruta   numeric,
   divida_liq     numeric,
-  caixa          numeric,
+  caixa          numeric,                      -- caixa + aplicações financeiras
   pl             numeric,                      -- patrimônio líquido
   ativos_totais  numeric,                      -- usado na decomposição DuPont (giro de ativos, alavancagem)
   capex          numeric,

@@ -174,6 +174,21 @@ Nenhuma no momento — a última pendência (constraint de acento em `veredito_m
 
 ---
 
+## 8.1 Qualidade de dados: dívida líquida corrigida (2026-08-11)
+
+Descoberta importante: a `divida_liq` original do `seed.sql` (usada desde o início em todo o app, inclusive no indicador Dívida/EBITDA) era uma **estimativa aproximada** feita quando o seed foi montado, não um valor calculado a partir do balanço linha a linha. Confirmado raspando `divida_bruta`/`caixa` reais de dadosdemercado.com.br para 28 das 31 empresas (validado contra 2 empresas conferidas manualmente pelo usuário, bateu 100%) — o cross-check `divida_bruta − caixa` vs. `divida_liq` armazenada disparou gap >5% em quase todas as linhas, não por erro de coleta, mas porque a base antiga era mesmo imprecisa.
+
+`divida_bruta`, `caixa` e `divida_liq` (recalculada) foram atualizados via SQL manual pra 28 empresas × 3 anos (2022-2024). `ativos_totais` também foi retroativamente preenchido pra essas empresas como bônus (alimenta a Decomposição DuPont sem precisar de entrada manual).
+
+**Pendências (não atualizadas, `divida_liq` continua com o valor antigo/estimado):**
+- **MRFG3** — não existe mais em dadosdemercado.com.br (provável reestruturação societária).
+- **CAML3** — calendário fiscal (~28/02) não gera coluna "4T" no site; a tabela tem uma estrutura diferente do padrão das outras 30 empresas, não investigada a fundo.
+- **RCSL4** — a fonte retornou "Empréstimos e financ." = 0 nos 3 anos e caixa ausente em 2 deles; dado incompleto/suspeito, não confiável pra sobrescrever.
+
+Método de coleta (reaproveitável pra outras empresas/campos no futuro): buscar `https://www.dadosdemercado.com.br/acoes/{TICKER}`, extrair a tabela HTML `id="balances"` diretamente (não usar WebFetch — o resumo por IA arredonda os números demais pra dado financeiro exato), localizar a coluna do header cujo texto é `4T{ano}`, e ler os `<td class="right nw">` correspondentes nas linhas "Caixa e eq. de caixa", "Aplicações financeiras", "Empréstimos e financ." (circulante) e "Emprést. de longo prazo" (não circulante) — somando as duas últimas dá a dívida bruta.
+
+---
+
 ## 9. O que NÃO existe ainda (gaps conhecidos)
 
 Já feitos desde a versão original deste documento (não são mais gaps): deploy público, autenticação, alertas de piora, exportar PDF, painel de admin de benchmarks, testes automatizados, perfis de membro com hierarquia e painel de gerenciamento.
