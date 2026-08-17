@@ -180,10 +180,10 @@ Descoberta importante: a `divida_liq` original do `seed.sql` (usada desde o iní
 
 `divida_bruta`, `caixa` e `divida_liq` (recalculada) foram atualizados via SQL manual pra 28 empresas × 3 anos (2022-2024). `ativos_totais` também foi retroativamente preenchido pra essas empresas como bônus (alimenta a Decomposição DuPont sem precisar de entrada manual).
 
-**Pendências (não atualizadas, `divida_liq` continua com o valor antigo/estimado):**
-- **MRFG3** — não existe mais em dadosdemercado.com.br (provável reestruturação societária).
-- **CAML3** — calendário fiscal (~28/02) não gera coluna "4T" no site; a tabela tem uma estrutura diferente do padrão das outras 30 empresas, não investigada a fundo.
-- **RCSL4** — a fonte retornou "Empréstimos e financ." = 0 nos 3 anos e caixa ausente em 2 deles; dado incompleto/suspeito, não confiável pra sobrescrever.
+**Pendências investigadas em seguida (2026-08-11):**
+- **MRFG3 — resolvido.** O ticker no site virou `MBRF3` (fusão Marfrig+BRF), mas o histórico foi preservado sob o novo ticker. `divida_bruta`/`caixa`/`ativos_totais`/`divida_liq` de 2022 e 2023 já foram atualizados pelo usuário.
+- **CAML3 — não dá pra resolver com essa fonte.** A tabela de balanços tem rótulos de trimestre inconsistentes pra essa empresa especificamente (duplicação sem padrão previsível — às vezes repete "3T", às vezes "1T"), então não há como saber com segurança qual coluna corresponde a dezembro. `divida_liq` continua com a estimativa antiga.
+- **RCSL4 — não é bug de coleta, é estrutura de dívida atípica.** A empresa tem patrimônio líquido negativo em 2 dos 3 anos (histórico de recuperação judicial) e nenhuma linha de "Empréstimos e financiamentos" no balanço — o passivo não circulante substancial (~38-41 mi) está classificado em categorias que a tabela resumida do site não separa. `divida_liq` continua com a estimativa antiga.
 
 Método de coleta (reaproveitável pra outras empresas/campos no futuro): buscar `https://www.dadosdemercado.com.br/acoes/{TICKER}`, extrair a tabela HTML `id="balances"` diretamente (não usar WebFetch — o resumo por IA arredonda os números demais pra dado financeiro exato), localizar a coluna do header cujo texto é `4T{ano}`, e ler os `<td class="right nw">` correspondentes nas linhas "Caixa e eq. de caixa", "Aplicações financeiras", "Empréstimos e financ." (circulante) e "Emprést. de longo prazo" (não circulante) — somando as duas últimas dá a dívida bruta.
 
