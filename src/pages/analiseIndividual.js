@@ -19,6 +19,7 @@ import {
   computeDuPont,
   computeCagr,
   computeEvMultiplos,
+  computeDcfSimplificado,
 } from '../lib/indicators.js'
 import { formatMoeda, formatMoedaCompacta } from '../lib/format.js'
 
@@ -93,6 +94,10 @@ export async function render(container, query) {
     revelado: false,
     preco: null,
     numAcoes: null,
+    dcfCrescimento: null,
+    dcfWacc: 12,
+    dcfAnos: 5,
+    dcfCrescimentoTerminal: 3,
     salvando: false,
     salvo: false,
   }
@@ -212,7 +217,7 @@ export async function render(container, query) {
     if (!preenchidos.length && !state.scorecard.observacoes.trim()) return ''
 
     return `
-      <section class="card">
+      <section class="card stack-card">
         <h2>Seu scorecard qualitativo</h2>
         <div class="qualitativo-resumo">
           ${preenchidos.map((c) => `<span class="badge badge-neutral">${c.label}: ${state.scorecard[c.key]}/5</span>`).join('')}
@@ -247,14 +252,14 @@ export async function render(container, query) {
     const dupont = computeDuPont(dados)
     if (!dupont) {
       return `
-        <section class="card">
+        <section class="card stack-card">
           <h2>Decomposição DuPont</h2>
           <p class="muted">Preencha "Ativos totais" deste período em Adicionar Dados para ver de onde vem o ROE (margem × giro de ativos × alavancagem).</p>
         </section>`
     }
 
     return `
-      <section class="card">
+      <section class="card stack-card">
         <h2>Decomposição DuPont</h2>
         <p class="muted">ROE = Margem líquida × Giro de ativos × Alavancagem financeira.</p>
         <div class="dupont-formula">
@@ -314,10 +319,74 @@ export async function render(container, query) {
 
   function crescimentoMultiplosHtml(dados) {
     return `
-      <section class="card">
+      <section class="card stack-card">
         <h2>Crescimento &amp; Múltiplos (EV)</h2>
         <p class="muted">EV (Enterprise Value) = valor de mercado + dívida líquida — diferente do P/L, considera a alavancagem da empresa.</p>
         <div id="crescimento-multiplos-body">${crescimentoMultiplosBodyHtml(dados)}</div>
+      </section>`
+  }
+
+  function dcfResultadoHtml(dados) {
+    const dcf = computeDcfSimplificado(dados, {
+      crescimentoAnual: state.dcfCrescimento,
+      wacc: state.dcfWacc,
+      anos: state.dcfAnos,
+      crescimentoTerminal: state.dcfCrescimentoTerminal,
+      numAcoes: state.numAcoes,
+    })
+
+    const precoAtual = state.preco
+    const upside =
+      dcf?.precoJusto != null && precoAtual ? ((dcf.precoJusto - precoAtual) / precoAtual) * 100 : null
+
+    if (dcf?.erro) {
+      return '<p class="form-error">A taxa de desconto (WACC) precisa ser maior que o crescimento na perpetuidade.</p>'
+    }
+    if (!dcf) {
+      return '<p class="muted">Preencha crescimento, WACC, anos de projeção e crescimento na perpetuidade para calcular.</p>'
+    }
+
+    return `
+      <div class="stats-grid">
+        <div class="card stat-card"><span class="stat-label">Valor da empresa (EV)</span><span class="stat-value" title="${formatMoeda(dcf.valorEmpresa)}">${formatMoedaCompacta(dcf.valorEmpresa)}</span></div>
+        <div class="card stat-card"><span class="stat-label">Valor do patrimônio</span><span class="stat-value" title="${formatMoeda(dcf.valorPatrimonio)}">${formatMoedaCompacta(dcf.valorPatrimonio)}</span></div>
+        <div class="card stat-card">
+          <span class="stat-label">Preço justo (DCF)</span>
+          <span class="stat-value">${dcf.precoJusto != null ? `R$ ${formatNumero(dcf.precoJusto, 2)}` : '—'}</span>
+        </div>
+      </div>
+      ${
+        upside != null
+          ? `<p class="muted">Preço atual informado: R$ ${formatNumero(precoAtual, 2)} → <strong class="${upside >= 0 ? 'mediana-favoravel' : 'mediana-desfavoravel'}">${upside >= 0 ? '+' : ''}${formatNumero(upside)}%</strong> de ${upside >= 0 ? 'potencial de alta' : 'potencial de queda'} segundo este modelo.</p>`
+          : '<p class="muted no-print">Preencha o preço da ação (na seção de indicadores acima) para comparar com o valor de mercado atual.</p>'
+      }
+      ${dcf.precoJusto == null ? '<p class="muted no-print">Preencha o nº de ações em circulação (na seção de indicadores acima) para calcular o preço justo por ação.</p>' : ''}`
+  }
+
+  function dcfHtml(dados) {
+    return `
+      <section class="card stack-card">
+        <h2>DCF simplificado (didático)</h2>
+        <p class="muted">Projeta o EBITDA do período como proxy de fluxo de caixa (não usa capex/impostos detalhados), traz a valor presente e soma um valor terminal. É uma aproximação pedagógica, não uma recomendação de investimento — o resultado é bem sensível às premissas informadas.</p>
+        <div class="form-row no-print">
+          <div class="field">
+            <label for="dcf-crescimento">Crescimento anual esperado (%)</label>
+            <input id="dcf-crescimento" type="number" step="0.1" value="${state.dcfCrescimento ?? ''}" placeholder="Ex: CAGR histórico" />
+          </div>
+          <div class="field">
+            <label for="dcf-wacc">Taxa de desconto / WACC (%)</label>
+            <input id="dcf-wacc" type="number" step="0.1" value="${state.dcfWacc ?? ''}" />
+          </div>
+          <div class="field">
+            <label for="dcf-anos">Anos de projeção</label>
+            <input id="dcf-anos" type="number" step="1" min="1" max="15" value="${state.dcfAnos ?? ''}" />
+          </div>
+          <div class="field">
+            <label for="dcf-g-terminal">Crescimento na perpetuidade (%)</label>
+            <input id="dcf-g-terminal" type="number" step="0.1" value="${state.dcfCrescimentoTerminal ?? ''}" />
+          </div>
+        </div>
+        <div id="dcf-resultado">${dcfResultadoHtml(dados)}</div>
       </section>`
   }
 
@@ -390,6 +459,8 @@ export async function render(container, query) {
       ${dupontHtml(dados)}
 
       ${crescimentoMultiplosHtml(dados)}
+
+      ${dcfHtml(dados)}
 
       <section class="stats-grid">
         <div class="card stat-card"><span class="stat-label">Receita</span><span class="stat-value" title="${formatMoeda(dados.receita)}">${formatMoedaCompacta(dados.receita)}</span></div>
@@ -495,7 +566,16 @@ export async function render(container, query) {
       crescimentoBody.innerHTML = crescimentoMultiplosBodyHtml(state.periodoSelecionado)
     }
 
+    atualizarDcfView()
+
     return { score, max, veredictoSistema }
+  }
+
+  function atualizarDcfView() {
+    const dcfResultado = container.querySelector('#dcf-resultado')
+    if (dcfResultado) {
+      dcfResultado.innerHTML = dcfResultadoHtml(state.periodoSelecionado)
+    }
   }
 
   function bindResultado() {
@@ -511,6 +591,19 @@ export async function render(container, query) {
     numAcoesInput.addEventListener('input', (e) => {
       state.numAcoes = e.target.value === '' ? null : parseFloat(e.target.value)
       atualizarIndicadoresView()
+    })
+
+    const camposDcf = [
+      ['dcf-crescimento', 'dcfCrescimento'],
+      ['dcf-wacc', 'dcfWacc'],
+      ['dcf-anos', 'dcfAnos'],
+      ['dcf-g-terminal', 'dcfCrescimentoTerminal'],
+    ]
+    camposDcf.forEach(([id, campo]) => {
+      container.querySelector(`#${id}`).addEventListener('input', (e) => {
+        state[campo] = e.target.value === '' ? null : parseFloat(e.target.value)
+        atualizarDcfView()
+      })
     })
 
     const salvarBtn = container.querySelector('#salvar-btn')
@@ -626,6 +719,9 @@ export async function render(container, query) {
       const preferido = periodoPreferido && state.periodos.find((d) => d.periodo === periodoPreferido)
       state.periodoSelecionado = preferido || state.periodos[state.periodos.length - 1]
     }
+
+    const cagr = computeCagr(state.periodos)
+    state.dcfCrescimento = cagr?.receita != null ? Math.round(cagr.receita * 10) / 10 : null
 
     draw()
   }

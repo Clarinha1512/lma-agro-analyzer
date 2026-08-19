@@ -234,6 +234,49 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
     expect(container.textContent).toMatch(/1[.,]7x/)
   })
 
+  it('mostra o DCF simplificado com o crescimento pré-preenchido pelo CAGR histórico', async () => {
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    expect(container.textContent).toMatch(/DCF simplificado/)
+    // CAGR de receita da SLCE3 (fixture) ≈ 33,2% — vira a sugestão inicial de crescimento
+    expect(container.querySelector('#dcf-crescimento').value).toBe('33.2')
+    // Com os defaults (WACC 12%, 5 anos, 3% na perpetuidade) já dá pra calcular
+    expect(container.querySelector('#dcf-resultado').textContent).toMatch(/Valor da empresa/)
+  })
+
+  it('recalcula o DCF ao vivo quando o usuário muda as premissas', async () => {
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    const waccInput = container.querySelector('#dcf-wacc')
+    waccInput.value = '2'
+    waccInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+    expect(container.querySelector('#dcf-resultado').textContent).toMatch(
+      /WACC\) precisa ser maior que o crescimento na perpetuidade/
+    )
+  })
+
+  it('mostra o preço justo do DCF e compara com o preço atual quando preenchido', async () => {
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'VENDA')
+    container.querySelector('#revelar-btn').click()
+
+    const numAcoesInput = container.querySelector('#num-acoes')
+    numAcoesInput.value = '500000000'
+    numAcoesInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+    const precoInput = container.querySelector('#preco-acao')
+    precoInput.value = '20'
+    precoInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+    expect(container.querySelector('#dcf-resultado').textContent).toMatch(/Preço justo \(DCF\)/)
+    expect(container.querySelector('#dcf-resultado').textContent).toMatch(/potencial de (alta|queda)/)
+  })
+
   it('mostra a mediana do subsetor (peer group) ao lado de cada indicador', async () => {
     const container = await renderComPreselecao()
     selecionarVeredito(container, 'VENDA')

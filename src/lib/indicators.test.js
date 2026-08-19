@@ -15,6 +15,7 @@ import {
   computeDuPont,
   computeCagr,
   computeEvMultiplos,
+  computeDcfSimplificado,
 } from './indicators.js'
 
 // Benchmarks reais do subsetor "primario" (seed.sql), usados nos testes para
@@ -407,6 +408,43 @@ describe('computeEvMultiplos', () => {
     const dados = { divida_liq: null, ebitda: 100, receita: 200 }
     const multiplos = computeEvMultiplos(dados, { preco: 10, numAcoes: 10 })
     expect(multiplos.ev).toBe(100) // só valor de mercado
+  })
+})
+
+describe('computeDcfSimplificado', () => {
+  const dados = { ebitda: 100, divida_liq: 20 }
+  const premissas = { crescimentoAnual: 10, wacc: 15, anos: 2, crescimentoTerminal: 5, numAcoes: 10 }
+
+  it('projeta o EBITDA, traz a valor presente e soma o valor terminal', () => {
+    const dcf = computeDcfSimplificado(dados, premissas)
+    // Fluxos: 110 (ano 1), 121 (ano 2). VT = 121*1,05/0,10 = 1270,5.
+    // EV = 110/1,15 + 121/1,15² + 1270,5/1,15² ≈ 1147,83
+    expect(dcf.valorEmpresa).toBeCloseTo(1147.83, 1)
+    expect(dcf.valorPatrimonio).toBeCloseTo(1127.83, 1) // EV - dívida líquida (20)
+    expect(dcf.precoJusto).toBeCloseTo(112.78, 1) // valorPatrimonio / 10 ações
+  })
+
+  it('retorna precoJusto null quando não há nº de ações', () => {
+    const dcf = computeDcfSimplificado(dados, { ...premissas, numAcoes: null })
+    expect(dcf.precoJusto).toBeNull()
+    expect(dcf.valorEmpresa).not.toBeNull()
+  })
+
+  it('retorna erro quando WACC <= crescimento na perpetuidade', () => {
+    const dcf = computeDcfSimplificado(dados, { ...premissas, wacc: 5, crescimentoTerminal: 5 })
+    expect(dcf.erro).toBe('wacc_deve_ser_maior_que_crescimento_terminal')
+  })
+
+  it('retorna null quando falta alguma premissa ou o período não tem EBITDA', () => {
+    expect(computeDcfSimplificado(dados, { ...premissas, crescimentoAnual: null })).toBeNull()
+    expect(computeDcfSimplificado(dados, { ...premissas, wacc: null })).toBeNull()
+    expect(computeDcfSimplificado(dados, { ...premissas, anos: 0 })).toBeNull()
+    expect(computeDcfSimplificado({ ebitda: null }, premissas)).toBeNull()
+  })
+
+  it('trata dívida líquida ausente como zero', () => {
+    const dcf = computeDcfSimplificado({ ebitda: 100, divida_liq: null }, premissas)
+    expect(dcf.valorPatrimonio).toBe(dcf.valorEmpresa)
   })
 })
 

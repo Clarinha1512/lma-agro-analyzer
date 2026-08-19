@@ -651,6 +651,16 @@ textarea {
   margin-bottom: 8px;
 }
 
+/* Espaçamento vertical entre blocos filhos diretos (parágrafos, form-rows, stats-grid) */
+.stack-card > * + * {
+  margin-top: 16px;
+}
+
+.stack-card #dcf-resultado > * + *,
+.stack-card #crescimento-multiplos-body > * + * {
+  margin-top: 12px;
+}
+
 /* Decomposição DuPont */
 .dupont-formula {
   display: flex;

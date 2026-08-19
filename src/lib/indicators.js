@@ -202,6 +202,49 @@ export function computeEvMultiplos(dados, { preco, numAcoes } = {}) {
   }
 }
 
+/**
+ * DCF simplificado e didático: projeta o EBITDA do período (proxy de fluxo de
+ * caixa, já que o app não tem capex/impostos detalhados) por N anos a uma taxa
+ * de crescimento informada, traz a valor presente pela taxa de desconto (WACC),
+ * soma um valor terminal (perpetuidade de Gordon) e subtrai a dívida líquida
+ * pra chegar num valor de patrimônio e, se houver nº de ações, um preço "justo".
+ *
+ * Não é um DCF profissional — é uma aproximação pedagógica, sensível às
+ * premissas informadas pelo usuário.
+ */
+export function computeDcfSimplificado(dados, { crescimentoAnual, wacc, anos, crescimentoTerminal, numAcoes } = {}) {
+  if (
+    dados.ebitda == null ||
+    crescimentoAnual == null ||
+    wacc == null ||
+    !anos ||
+    anos <= 0 ||
+    crescimentoTerminal == null
+  ) {
+    return null
+  }
+
+  const w = wacc / 100
+  const gt = crescimentoTerminal / 100
+  if (w <= gt) return { erro: 'wacc_deve_ser_maior_que_crescimento_terminal' }
+
+  const g = crescimentoAnual / 100
+  let fluxo = dados.ebitda
+  let valorPresenteFluxos = 0
+  for (let ano = 1; ano <= anos; ano++) {
+    fluxo *= 1 + g
+    valorPresenteFluxos += fluxo / Math.pow(1 + w, ano)
+  }
+
+  const valorTerminal = (fluxo * (1 + gt)) / (w - gt)
+  const valorPresenteTerminal = valorTerminal / Math.pow(1 + w, anos)
+  const valorEmpresa = valorPresenteFluxos + valorPresenteTerminal
+  const valorPatrimonio = valorEmpresa - (dados.divida_liq ?? 0)
+  const precoJusto = numAcoes ? valorPatrimonio / numAcoes : null
+
+  return { valorEmpresa, valorPatrimonio, precoJusto }
+}
+
 /** Anexa a mediana do subsetor a cada indicador e se o valor da empresa é favorável frente a ela. */
 export function comMedianaSubsetor(indicadores, medianas) {
   return indicadores.map((row) => {
