@@ -217,7 +217,7 @@ export async function render(container, query) {
     if (!preenchidos.length && !state.scorecard.observacoes.trim()) return ''
 
     return `
-      <section class="card stack-card">
+      <section class="card stack-card nota-pedagogica">
         <h2>Seu scorecard qualitativo</h2>
         <div class="qualitativo-resumo">
           ${preenchidos.map((c) => `<span class="badge badge-neutral">${c.label}: ${state.scorecard[c.key]}/5</span>`).join('')}
@@ -390,7 +390,7 @@ export async function render(container, query) {
       </section>`
   }
 
-  function printHeaderHtml(dados, veredictoSistema, score, max) {
+  function printHeaderHtml(dados) {
     const agora = new Date().toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -400,12 +400,91 @@ export async function render(container, query) {
     })
     return `
       <div class="print-only print-header">
-        <h1>LMA Agro Analyzer — Relatório de Análise Fundamentalista</h1>
-        <p><strong>${state.empresa.ticker}</strong> — ${state.empresa.nome} · ${state.empresa.subsetor_label}</p>
-        <p>Período: ${formatPeriodo(dados.periodo)} (${dados.tipo})</p>
-        <p>Veredito do membro (${state.membro || 'Anônimo'}): <strong>${state.veredictoMembro || '—'}</strong>${state.justificativa ? ` — "${state.justificativa}"` : ''}</p>
-        <p>Veredito do sistema: <strong>${veredictoSistema}</strong> (score ${score}/${max})</p>
-        <p class="muted">Relatório gerado em ${agora}</p>
+        <div class="print-header-marca">
+          <div class="brand-mark">LMA</div>
+          <div>
+            <strong>LMA Agro Analyzer</strong>
+            <span>Análise Fundamentalista · Liga de Mercado de Ações</span>
+          </div>
+        </div>
+        <div class="print-header-meta">
+          <strong>${state.empresa.ticker}</strong>
+          <span>${formatPeriodo(dados.periodo)} (${dados.tipo})</span>
+          <span>${agora}</span>
+        </div>
+      </div>`
+  }
+
+  function fichaTecnicaHtml(dados, indicadores, veredictoSistema) {
+    const porChave = Object.fromEntries(indicadores.map((r) => [r.key, r]))
+    const evMultiplos = computeEvMultiplos(dados, { preco: state.preco, numAcoes: state.numAcoes })
+    const dcf = computeDcfSimplificado(dados, {
+      crescimentoAnual: state.dcfCrescimento,
+      wacc: state.dcfWacc,
+      anos: state.dcfAnos,
+      crescimentoTerminal: state.dcfCrescimentoTerminal,
+      numAcoes: state.numAcoes,
+    })
+    const precoAtual = state.preco
+    const upside =
+      dcf?.precoJusto != null && precoAtual ? ((dcf.precoJusto - precoAtual) / precoAtual) * 100 : null
+    const veredictoClasse = veredictoSistema === 'COMPRA' ? 'ok' : veredictoSistema === 'VENDA' ? 'danger' : 'warn'
+    const valor = (v, unidade, casas = 1) => (v != null ? `${formatNumero(v, casas)}${unidade}` : '—')
+
+    return `
+      <div class="print-only ficha-tecnica">
+        <div class="ficha-tecnica-topo">
+          <div class="ficha-item ficha-rating">
+            <span class="muted">Rating do sistema</span>
+            <span class="badge badge-${veredictoClasse}">${veredictoSistema}</span>
+          </div>
+          <div class="ficha-item">
+            <span class="muted">Preço atual</span>
+            <strong>${precoAtual ? `R$ ${formatNumero(precoAtual, 2)}` : '—'}</strong>
+          </div>
+          <div class="ficha-item">
+            <span class="muted">Preço-alvo (DCF)</span>
+            <strong>${dcf?.precoJusto != null ? `R$ ${formatNumero(dcf.precoJusto, 2)}` : '—'}</strong>
+          </div>
+          <div class="ficha-item">
+            <span class="muted">Potencial</span>
+            <strong class="${upside == null ? '' : upside >= 0 ? 'mediana-favoravel' : 'mediana-desfavoravel'}">${upside != null ? `${upside >= 0 ? '+' : ''}${formatNumero(upside)}%` : '—'}</strong>
+          </div>
+        </div>
+        <table class="ficha-tabela">
+          <thead>
+            <tr><th>ROE</th><th>Margem líq.</th><th>Dívida/EBITDA</th><th>P/L</th><th>P/VP</th><th>EV/EBITDA</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>${valor(porChave.roe.valor, '%')}</td>
+              <td>${valor(porChave.mg.valor, '%')}</td>
+              <td>${valor(porChave.div.valor, 'x')}</td>
+              <td>${valor(porChave.pl.valor, 'x')}</td>
+              <td>${valor(porChave.pvp.valor, 'x')}</td>
+              <td>${valor(evMultiplos?.evEbitda, 'x', 2)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="ficha-analista">Analista: <strong>${state.membro || 'Anônimo'}</strong> · ${state.empresa.nome} · ${state.empresa.subsetor_label}</p>
+      </div>`
+  }
+
+  function teseAnalistaHtml() {
+    if (!state.veredictoMembro) return ''
+    return `
+      <div class="print-only tese-analista">
+        <h2>Tese do analista</h2>
+        <p><span class="badge badge-neutral">Veredito: ${state.veredictoMembro}</span></p>
+        <p>${state.justificativa ? `"${state.justificativa}"` : '<span class="muted">Nenhuma justificativa registrada.</span>'}</p>
+      </div>`
+  }
+
+  function relatorioRodapeHtml() {
+    return `
+      <div class="print-only relatorio-rodape">
+        <p>Relatório gerado automaticamente pela LMA Agro Analyzer — ferramenta educacional da Liga de Mercado de Ações.</p>
+        <p>Uso pedagógico. Não constitui recomendação de investimento.</p>
       </div>`
   }
 
@@ -417,7 +496,9 @@ export async function render(container, query) {
     const concorda = state.veredictoMembro === veredictoSistema
 
     return `
-      ${printHeaderHtml(dados, veredictoSistema, score, max)}
+      ${printHeaderHtml(dados)}
+      ${fichaTecnicaHtml(dados, indicadores, veredictoSistema)}
+      ${teseAnalistaHtml()}
 
       <section class="grid-2">
         <div class="card gauge-card">
@@ -427,7 +508,7 @@ export async function render(container, query) {
             <span class="badge badge-${veredictoSistema === 'COMPRA' ? 'ok' : veredictoSistema === 'VENDA' ? 'danger' : 'warn'}">Sistema: ${veredictoSistema}</span>
             <span class="badge badge-neutral">Você: ${state.veredictoMembro || '—'}</span>
           </div>
-          <p class="muted">${concorda ? 'Seu veredito coincide com o do sistema.' : 'Seu veredito diverge do sistema — vale revisar a justificativa.'}</p>
+          <p class="muted nota-pedagogica">${concorda ? 'Seu veredito coincide com o do sistema.' : 'Seu veredito diverge do sistema — vale revisar a justificativa.'}</p>
         </div>
         <div class="card">
           <h2>Perfil dos indicadores</h2>
@@ -474,6 +555,8 @@ export async function render(container, query) {
         <h2>Evolução histórica</h2>
         <canvas id="evolucao-chart"></canvas>
       </section>
+
+      ${relatorioRodapeHtml()}
 
       <section class="card no-print">
         <button id="salvar-btn" class="btn btn-primary" ${state.salvo ? 'disabled' : ''}>
