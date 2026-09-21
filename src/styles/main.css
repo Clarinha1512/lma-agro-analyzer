@@ -643,6 +643,73 @@ textarea {
   font-weight: 500;
 }
 
+/* Tese qualitativa (obrigatória antes do relatório) */
+.obrigatorio {
+  color: var(--color-danger);
+}
+
+.tese-prompts {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.tese-contador {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.tese-contador.tese-ok {
+  color: var(--color-ok);
+  font-weight: 600;
+}
+
+/* Comparação: tese do membro × dados do sistema */
+.comparacao-colunas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .comparacao-colunas {
+    grid-template-columns: 1fr;
+  }
+}
+
+.comparacao-coluna h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  margin: 0 0 10px;
+}
+
+.comparacao-coluna p {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+}
+
+.comparacao-coluna + .comparacao-coluna {
+  border-left: 1px solid var(--color-border);
+  padding-left: 20px;
+}
+
+@media (max-width: 900px) {
+  .comparacao-coluna + .comparacao-coluna {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--color-border);
+    padding-top: 16px;
+  }
+}
+
+.tese-registrada {
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
 /* Scorecard qualitativo */
 .qualitativo-resumo {
   display: flex;

@@ -16,6 +16,7 @@ import {
   computeCagr,
   computeEvMultiplos,
   computeDcfSimplificado,
+  leituraDoSistema,
 } from './indicators.js'
 
 // Benchmarks reais do subsetor "primario" (seed.sql), usados nos testes para
@@ -445,6 +446,53 @@ describe('computeDcfSimplificado', () => {
   it('trata dívida líquida ausente como zero', () => {
     const dcf = computeDcfSimplificado({ ebitda: 100, divida_liq: null }, premissas)
     expect(dcf.valorPatrimonio).toBe(dcf.valorEmpresa)
+  })
+})
+
+describe('leituraDoSistema', () => {
+  const contexto = { score: 1, max: 6, veredicto: 'VENDA', peersCount: 5 }
+
+  it('descreve score, classificações, tendências e comparação com os pares', () => {
+    const indicadores = [
+      { label: 'ROE', classe: 'danger', tendencia: 'piora', favoravel: false },
+      { label: 'Margem líquida', classe: 'danger', tendencia: 'piora', favoravel: false },
+      { label: 'Dívida/EBITDA', classe: 'warn', tendencia: 'piora', favoravel: true },
+      { label: 'P/L', classe: null, tendencia: null },
+    ]
+    const frases = leituraDoSistema(indicadores, contexto).join(' ')
+
+    expect(frases).toMatch(/Somando 1 de 6 pontos possíveis nos 3 indicadores/)
+    expect(frases).toMatch(/chega a VENDA/)
+    expect(frases).toMatch(/Fora da faixa saudável do subsetor: ROE, Margem líquida\./)
+    expect(frases).toMatch(/Em zona de atenção: Dívida\/EBITDA\./)
+    expect(frases).toMatch(/Pioraram frente ao período anterior: ROE, Margem líquida, Dívida\/EBITDA\./)
+    expect(frases).toMatch(/Frente às 5 empresas do subsetor, está melhor que a mediana em Dívida\/EBITDA e pior em ROE, Margem líquida\./)
+  })
+
+  it('não fala de tendência quando não há período anterior', () => {
+    const indicadores = [{ label: 'ROE', classe: 'ok', tendencia: null }]
+    const frases = leituraDoSistema(indicadores, { score: 2, max: 2, veredicto: 'COMPRA', peersCount: 1 }).join(' ')
+
+    expect(frases).toMatch(/Dentro da faixa saudável: ROE\./)
+    expect(frases).not.toMatch(/período anterior/)
+  })
+
+  it('não fala de mediana quando a empresa não tem pares no subsetor', () => {
+    const indicadores = [{ label: 'ROE', classe: 'ok', favoravel: true }]
+    const frases = leituraDoSistema(indicadores, { score: 2, max: 2, veredicto: 'COMPRA', peersCount: 1 }).join(' ')
+
+    expect(frases).not.toMatch(/mediana/)
+  })
+
+  it('não afirma nada sobre score quando nenhum indicador tem benchmark', () => {
+    const frases = leituraDoSistema([{ label: 'P/L', classe: null }], {
+      score: 0,
+      max: 0,
+      veredicto: 'INDEFINIDO',
+      peersCount: 3,
+    })
+
+    expect(frases).toEqual([])
   })
 })
 

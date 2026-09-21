@@ -101,11 +101,16 @@ create table analises (
   id                bigint generated always as identity primary key,
   ticker            text not null,
   periodo           text not null,
-  membro            text,                       -- nome de quem fez
+  membro            text,                       -- nome de quem fez (histórico, pré-auth)
+  membro_id         uuid references profiles(id),
 
   -- Veredito do membro (análise manual pedagógica)
   veredito_membro   text check (veredito_membro in ('COMPRA','MANUTENÇÃO','VENDA') or veredito_membro is null),
+
+  -- Tese qualitativa do membro: obrigatória (mín. 300 caracteres) e gravada no
+  -- instante em que ele pede o relatório, ANTES de ver qualquer número do sistema.
   notas_membro      text,
+  tese_registrada_em timestamptz,
 
   -- Veredito do sistema (automático)
   veredito_sistema  text,

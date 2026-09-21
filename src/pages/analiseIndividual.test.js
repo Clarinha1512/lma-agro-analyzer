@@ -106,6 +106,7 @@ beforeEach(() => {
     user: { id: 'user-1', email: 'membro@liga.com', user_metadata: { nome: 'Enrico' } },
   })
   getProfileMock.mockResolvedValue({ id: 'user-1', nome: 'Enrico', nivel: 'analista' })
+  salvarAnaliseMock.mockResolvedValue({ id: 1 })
 })
 
 async function renderComPreselecao() {
@@ -118,6 +119,34 @@ function selecionarVeredito(container, valor) {
   const radio = container.querySelector(`input[name="veredito-membro"][value="${valor}"]`)
   radio.checked = true
   radio.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+// Respostas com folga acima do mínimo de 300 caracteres somados.
+const RESPOSTAS_TESE = {
+  saude:
+    'A SLC Agrícola vem de um ano difícil: a receita cresceu, mas a margem líquida despencou e a alavancagem subiu bastante em 2024.',
+  compraria:
+    'Não compraria hoje. Prefiro esperar sinais concretos de recuperação de margem antes de entrar nessa posição.',
+  preocupacao:
+    'O que mais me preocupa é a dívida líquida crescendo mais rápido que o EBITDA, num ciclo ruim de preços de commodities.',
+}
+
+function preencherTese(container, respostas = RESPOSTAS_TESE) {
+  Object.entries(respostas).forEach(([key, texto]) => {
+    const textarea = container.querySelector(`#tese-${key}`)
+    textarea.value = texto
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
+/** Articula veredito + tese e gera o relatório (o clique agora grava no Supabase antes de revelar). */
+async function gerarRelatorio(container, veredito) {
+  selecionarVeredito(container, veredito)
+  preencherTese(container)
+  container.querySelector('#revelar-btn').click()
+  await vi.waitFor(() => {
+    expect(container.querySelector('#gauge-container')).not.toBeNull()
+  })
 }
 
 describe('Análise Individual — fluxo veredito-primeiro', () => {
@@ -146,24 +175,109 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
   it('esconde o veredito do sistema até o membro registrar o dele', async () => {
     const container = await renderComPreselecao()
 
-    expect(container.textContent).toMatch(/Antes de ver o veredito do sistema/)
+    expect(container.textContent).toMatch(/Antes de ver o que o sistema calculou/)
     expect(container.querySelector('#gauge-container')).toBeNull()
     expect(container.querySelector('#revelar-btn').disabled).toBe(true)
   })
 
-  it('habilita "Revelar" só depois de escolher um veredito', async () => {
+  it('mantém o relatório bloqueado enquanto a tese não atingir o mínimo de caracteres', async () => {
     const container = await renderComPreselecao()
 
     selecionarVeredito(container, 'COMPRA')
+    expect(container.querySelector('#revelar-btn').disabled).toBe(true)
 
+    preencherTese(container, { saude: 'Curta.', compraria: 'Não.', preocupacao: 'Dívida.' })
+    expect(container.querySelector('#revelar-btn').disabled).toBe(true)
+    expect(container.querySelector('#tese-contador').textContent).toMatch(/17 \/ 300 caracteres/)
+  })
+
+  it('exige resposta nas três perguntas, não só o total de caracteres', async () => {
+    const container = await renderComPreselecao()
+    selecionarVeredito(container, 'COMPRA')
+
+    // Só duas respondidas, mas já passando de 300 caracteres somados
+    preencherTese(container, {
+      saude: RESPOSTAS_TESE.saude + RESPOSTAS_TESE.preocupacao,
+      compraria: RESPOSTAS_TESE.compraria,
+      preocupacao: '',
+    })
+
+    expect(container.querySelector('#tese-contador').textContent).toMatch(/\d{3,} \/ 300/)
+    expect(container.querySelector('#revelar-btn').disabled).toBe(true)
+  })
+
+  it('libera o relatório só com veredito escolhido E tese completa', async () => {
+    const container = await renderComPreselecao()
+
+    preencherTese(container)
+    expect(container.querySelector('#revelar-btn').disabled).toBe(true) // falta o veredito
+
+    selecionarVeredito(container, 'COMPRA')
     expect(container.querySelector('#revelar-btn').disabled).toBe(false)
+    expect(container.querySelector('#tese-contador').classList.contains('tese-ok')).toBe(true)
+  })
+
+  it('grava a tese no Supabase no momento em que o relatório é gerado, antes de mostrar os números', async () => {
+    const container = await renderComPreselecao()
+
+    await gerarRelatorio(container, 'COMPRA')
+
+    expect(salvarAnaliseMock).toHaveBeenCalledTimes(1)
+    const salvo = salvarAnaliseMock.mock.calls[0][0]
+    // As três respostas viram um texto único, com os títulos das perguntas
+    expect(salvo.notas_membro).toBe(
+      `Saúde financeira: ${RESPOSTAS_TESE.saude}\n\n` +
+        `Decisão de compra: ${RESPOSTAS_TESE.compraria}\n\n` +
+        `Principal preocupação: ${RESPOSTAS_TESE.preocupacao}`
+    )
+    expect(salvo.veredito_membro).toBe('COMPRA')
+    expect(salvo.membro_id).toBe('user-1')
+    expect(salvo.tese_registrada_em).toBeTruthy()
+    // O veredito do sistema é o apurado no instante do registro (1/6 → VENDA)
+    expect(salvo.veredito_sistema).toBe('VENDA')
+    expect(salvo.score_sistema).toBe(1)
+  })
+
+  it('não revela o relatório se a gravação da tese falhar', async () => {
+    salvarAnaliseMock.mockRejectedValue(new Error('sem conexão'))
+    const container = await renderComPreselecao()
+
+    selecionarVeredito(container, 'COMPRA')
+    preencherTese(container)
+    container.querySelector('#revelar-btn').click()
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('#revelar-status').textContent).toMatch(/Erro ao registrar a tese/)
+    })
+    expect(container.querySelector('#gauge-container')).toBeNull()
+    expect(container.querySelector('#revelar-btn').disabled).toBe(false)
+  })
+
+  it('mostra a tese registrada lado a lado com a leitura escrita do sistema', async () => {
+    const container = await renderComPreselecao()
+
+    await gerarRelatorio(container, 'COMPRA')
+
+    const comparacao = container.querySelector('.comparacao-tese')
+    expect(comparacao.textContent).toMatch(/O que você concluiu/)
+    expect(comparacao.textContent).toMatch(/O que os dados mostram/)
+
+    // As três respostas aparecem separadas, com o título de cada pergunta
+    const respostas = [...comparacao.querySelectorAll('.tese-registrada')]
+    expect(respostas).toHaveLength(3)
+    expect(respostas[0].textContent).toMatch(/Saúde financeira:.*ano difícil/)
+    expect(respostas[2].textContent).toMatch(/Principal preocupação:.*dívida líquida/)
+
+    // Leitura do sistema montada a partir dos números reais do período
+    expect(comparacao.textContent).toMatch(/Somando 1 de 6 pontos/)
+    expect(comparacao.textContent).toMatch(/Fora da faixa saudável do subsetor: ROE, Margem líquida/)
+    expect(comparacao.textContent).toMatch(/Pioraram frente ao período anterior/)
   })
 
   it('revela o veredito do sistema e sinaliza divergência com o do membro', async () => {
     const container = await renderComPreselecao()
 
-    selecionarVeredito(container, 'COMPRA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'COMPRA')
 
     // Score real apurado: 2024-12 vs benchmark "primario" = 1/6 → VENDA
     expect(container.textContent).toMatch(/Sistema: VENDA/)
@@ -174,16 +288,14 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
   it('reconhece concordância quando o veredito do membro bate com o do sistema', async () => {
     const container = await renderComPreselecao()
 
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     expect(container.textContent).toMatch(/coincide com o do sistema/)
   })
 
   it('avisa que falta "ativos totais" quando o período não tem esse dado (DuPont)', async () => {
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     expect(container.textContent).toMatch(/Preencha "Ativos totais" deste período em Adicionar Dados/)
   })
@@ -194,8 +306,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
       { ...PERIODOS_SLCE3[1], ativos_totais: 12_000_000_000 },
     ])
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     expect(container.textContent).toMatch(/ROE = Margem líquida × Giro de ativos × Alavancagem/)
     // 3,0% (margem) × 0,799x (giro = 9,59bi/12bi) × 2,258x (alavancagem = 12bi/5,315bi) ≈ 5,4%
@@ -204,8 +315,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
 
   it('mostra o CAGR de receita e lucro entre o primeiro e o último período cadastrado', async () => {
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     // Receita: 7,2bi (2023) → 9,59bi (2024), 1 ano → CAGR ≈ 33,2%
     // Lucro: 850mi (2023) → 290,6mi (2024), 1 ano → CAGR ≈ -65,8%
@@ -216,8 +326,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
 
   it('calcula EV/EBITDA e EV/Receita ao vivo quando preço e nº de ações são preenchidos', async () => {
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     expect(container.textContent).toMatch(/Preencha preço da ação e nº de ações/)
 
@@ -236,8 +345,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
 
   it('mostra o DCF simplificado com o crescimento pré-preenchido pelo CAGR histórico', async () => {
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     expect(container.textContent).toMatch(/DCF simplificado/)
     // CAGR de receita da SLCE3 (fixture) ≈ 33,2% — vira a sugestão inicial de crescimento
@@ -248,8 +356,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
 
   it('recalcula o DCF ao vivo quando o usuário muda as premissas', async () => {
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     const waccInput = container.querySelector('#dcf-wacc')
     waccInput.value = '2'
@@ -262,8 +369,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
 
   it('mostra o preço justo do DCF e compara com o preço atual quando preenchido', async () => {
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     const numAcoesInput = container.querySelector('#num-acoes')
     numAcoesInput.value = '500000000'
@@ -279,8 +385,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
 
   it('mostra a mediana do subsetor (peer group) ao lado de cada indicador', async () => {
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     expect(container.textContent).toMatch(/Mediana calculada com 2 empresas do subsetor Produção agrícola/)
 
@@ -292,8 +397,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
   it('mostra a seta de piora nos indicadores que caíram vs. o período anterior', async () => {
     const container = await renderComPreselecao()
 
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     const linhaRoe = [...container.querySelectorAll('.indicator-row')].find((el) =>
       el.textContent.includes('ROE')
@@ -303,8 +407,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
 
   it('calcula P/L e P/VP ao vivo quando preço e nº de ações são preenchidos', async () => {
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     const precoInput = container.querySelector('#preco-acao')
     precoInput.value = '20'
@@ -321,8 +424,7 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
   it('chama window.print() ao clicar em "Exportar PDF"', async () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     container.querySelector('#exportar-btn').click()
 
@@ -330,16 +432,8 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
   })
 
   it('salva a análise com o score e veredito do sistema calculados', async () => {
-    salvarAnaliseMock.mockResolvedValue({ id: 99 })
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'COMPRA')
-    container.querySelector('#revelar-btn').click()
-
-    container.querySelector('#salvar-btn').click()
-
-    await vi.waitFor(() => {
-      expect(salvarAnaliseMock).toHaveBeenCalledTimes(1)
-    })
+    await gerarRelatorio(container, 'COMPRA')
 
     expect(salvarAnaliseMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -354,10 +448,10 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
     )
   })
 
-  it('inclui o scorecard qualitativo preenchido ao salvar, e mostra o resumo depois de revelar', async () => {
-    salvarAnaliseMock.mockResolvedValue({ id: 1 })
+  it('inclui o scorecard qualitativo preenchido ao gerar o relatório, e mostra o resumo depois', async () => {
     const container = await renderComPreselecao()
     selecionarVeredito(container, 'COMPRA')
+    preencherTese(container)
 
     const governancaSelect = container.querySelector('#qual-governanca')
     governancaSelect.value = '4'
@@ -368,15 +462,12 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
     observacoesInput.dispatchEvent(new Event('input', { bubbles: true }))
 
     container.querySelector('#revelar-btn').click()
+    await vi.waitFor(() => {
+      expect(container.querySelector('#gauge-container')).not.toBeNull()
+    })
 
     expect(container.textContent).toMatch(/Seu scorecard qualitativo/)
     expect(container.textContent).toMatch(/Governança: 4\/5/)
-
-    container.querySelector('#salvar-btn').click()
-
-    await vi.waitFor(() => {
-      expect(salvarAnaliseMock).toHaveBeenCalledTimes(1)
-    })
 
     expect(salvarAnaliseMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -392,19 +483,10 @@ describe('Análise Individual — fluxo veredito-primeiro', () => {
   })
 
   it('envia scorecard_qualitativo como null e não mostra resumo quando nada é preenchido', async () => {
-    salvarAnaliseMock.mockResolvedValue({ id: 2 })
     const container = await renderComPreselecao()
-    selecionarVeredito(container, 'VENDA')
-    container.querySelector('#revelar-btn').click()
+    await gerarRelatorio(container, 'VENDA')
 
     expect(container.querySelector('.qualitativo-resumo')).toBeNull()
-
-    container.querySelector('#salvar-btn').click()
-
-    await vi.waitFor(() => {
-      expect(salvarAnaliseMock).toHaveBeenCalledTimes(1)
-    })
-
     expect(salvarAnaliseMock).toHaveBeenCalledWith(expect.objectContaining({ scorecard_qualitativo: null }))
   })
 })

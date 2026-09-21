@@ -245,6 +245,47 @@ export function computeDcfSimplificado(dados, { crescimentoAnual, wacc, anos, cr
   return { valorEmpresa, valorPatrimonio, precoJusto }
 }
 
+/**
+ * Leitura em texto do que os indicadores mostram, montada por regras a partir dos
+ * valores já calculados. Não estima e não inventa: cada frase só entra se o dado
+ * que a sustenta existir (sem período anterior, não fala de tendência; sem peers,
+ * não fala de mediana).
+ */
+export function leituraDoSistema(indicadores, { score, max, veredicto, peersCount } = {}) {
+  const frases = []
+  const rotulos = (lista) => lista.map((r) => r.label).join(', ')
+
+  const avaliados = indicadores.filter((r) => r.classe)
+  if (max > 0) {
+    frases.push(
+      `Somando ${score} de ${max} pontos possíveis nos ${avaliados.length} indicadores com benchmark disponível, o sistema chega a ${veredicto}.`
+    )
+  }
+
+  const ruins = indicadores.filter((r) => r.classe === 'danger')
+  const atencao = indicadores.filter((r) => r.classe === 'warn')
+  const bons = indicadores.filter((r) => r.classe === 'ok')
+  if (ruins.length) frases.push(`Fora da faixa saudável do subsetor: ${rotulos(ruins)}.`)
+  if (atencao.length) frases.push(`Em zona de atenção: ${rotulos(atencao)}.`)
+  if (bons.length) frases.push(`Dentro da faixa saudável: ${rotulos(bons)}.`)
+
+  const piorou = indicadores.filter((r) => r.tendencia === 'piora')
+  const melhorou = indicadores.filter((r) => r.tendencia === 'melhora')
+  if (piorou.length) frases.push(`Pioraram frente ao período anterior: ${rotulos(piorou)}.`)
+  if (melhorou.length) frases.push(`Melhoraram frente ao período anterior: ${rotulos(melhorou)}.`)
+
+  const acima = indicadores.filter((r) => r.favoravel === true)
+  const abaixo = indicadores.filter((r) => r.favoravel === false)
+  if (peersCount > 1 && (acima.length || abaixo.length)) {
+    const partes = []
+    if (acima.length) partes.push(`melhor que a mediana em ${rotulos(acima)}`)
+    if (abaixo.length) partes.push(`pior em ${rotulos(abaixo)}`)
+    frases.push(`Frente às ${peersCount} empresas do subsetor, está ${partes.join(' e ')}.`)
+  }
+
+  return frases
+}
+
 /** Anexa a mediana do subsetor a cada indicador e se o valor da empresa é favorável frente a ela. */
 export function comMedianaSubsetor(indicadores, medianas) {
   return indicadores.map((row) => {

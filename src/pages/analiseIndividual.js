@@ -20,10 +20,33 @@ import {
   computeCagr,
   computeEvMultiplos,
   computeDcfSimplificado,
+  leituraDoSistema,
 } from '../lib/indicators.js'
 import { formatMoeda, formatMoedaCompacta } from '../lib/format.js'
 
 const VEREDITOS = ['COMPRA', 'MANUTENÇÃO', 'VENDA']
+
+/** Mínimo de caracteres da tese qualitativa (somando as respostas) — trava a geração do relatório. */
+export const TESE_MIN_CARACTERES = 300
+
+/** As três perguntas que compõem a tese. As respostas viram um texto único ao salvar. */
+export const PERGUNTAS_TESE = [
+  {
+    key: 'saude',
+    titulo: 'Saúde financeira',
+    pergunta: 'Qual sua leitura sobre a saúde financeira desta empresa?',
+  },
+  {
+    key: 'compraria',
+    titulo: 'Decisão de compra',
+    pergunta: 'Você compraria essa ação hoje? Por quê?',
+  },
+  {
+    key: 'preocupacao',
+    titulo: 'Principal preocupação',
+    pergunta: 'O que mais te preocupa aqui?',
+  },
+]
 
 const CRITERIOS_QUALITATIVOS = [
   { key: 'governanca', label: 'Governança' },
@@ -40,6 +63,17 @@ function formatPeriodo(periodo) {
 function formatNumero(valor, casas = 1) {
   if (valor == null) return '—'
   return valor.toLocaleString('pt-BR', { maximumFractionDigits: casas })
+}
+
+function formatDataHora(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export async function render(container, query) {
@@ -70,6 +104,7 @@ export async function render(container, query) {
     return
   }
 
+  const membroId = session?.user?.id ?? null
   let nomeMembro = session?.user?.email || 'Anônimo'
   if (session?.user) {
     try {
@@ -89,7 +124,7 @@ export async function render(container, query) {
     peersCount: 0,
     membro: nomeMembro,
     veredictoMembro: null,
-    justificativa: '',
+    tese: { saude: '', compraria: '', preocupacao: '' },
     scorecard: { governanca: null, gestao: null, posicaoCompetitiva: null, riscos: null, observacoes: '' },
     revelado: false,
     preco: null,
@@ -98,8 +133,7 @@ export async function render(container, query) {
     dcfWacc: 12,
     dcfAnos: 5,
     dcfCrescimentoTerminal: 3,
-    salvando: false,
-    salvo: false,
+    registradoEm: null,
   }
 
   let radarChart = null
@@ -163,11 +197,31 @@ export async function render(container, query) {
       </section>`
   }
 
+  /** Caracteres escritos pelo membro (só as respostas; os títulos são automáticos). */
+  function caracteresDaTese() {
+    return PERGUNTAS_TESE.reduce((soma, p) => soma + state.tese[p.key].trim().length, 0)
+  }
+
+  /** Junta as três respostas num texto único, que é o que vai pro banco e pro relatório. */
+  function teseTexto() {
+    return PERGUNTAS_TESE.map((p) => `${p.titulo}: ${state.tese[p.key].trim()}`).join('\n\n')
+  }
+
+  function teseCompleta() {
+    const todasRespondidas = PERGUNTAS_TESE.every((p) => state.tese[p.key].trim().length > 0)
+    return todasRespondidas && caracteresDaTese() >= TESE_MIN_CARACTERES
+  }
+
+  function podeGerarRelatorio() {
+    return Boolean(state.veredictoMembro) && teseCompleta()
+  }
+
   function renderVeredictoForm() {
+    const usados = caracteresDaTese()
     return `
-      <section class="card no-print">
-        <h2>Antes de ver o veredito do sistema…</h2>
-        <p class="muted">Registre sua própria análise. Isso ajuda a comparar seu raciocínio com o modelo quantitativo.</p>
+      <section class="card stack-card no-print">
+        <h2>Antes de ver o que o sistema calculou…</h2>
+        <p class="muted">Aqui você articula seu raciocínio primeiro. O relatório só abre depois — a ideia é comparar o que <em>você</em> concluiu com o que os dados mostram, não o contrário.</p>
         <p class="muted">Você: <strong>${state.membro}</strong></p>
         <div class="field">
           <label>Seu veredito</label>
@@ -182,12 +236,21 @@ export async function render(container, query) {
           </div>
         </div>
         <div class="field">
-          <label for="justificativa">Justificativa</label>
-          <textarea id="justificativa" rows="3" placeholder="Por que você chegou a esse veredito?">${state.justificativa}</textarea>
+          <label>Sua tese <span class="obrigatorio">*</span></label>
+          <p class="muted">Responda as três perguntas abaixo. Elas viram um texto único no seu relatório.</p>
         </div>
-        <button id="revelar-btn" class="btn btn-primary" ${state.veredictoMembro ? '' : 'disabled'}>
-          Revelar veredito do sistema
+        ${PERGUNTAS_TESE.map(
+          (p) => `
+          <div class="field">
+            <label for="tese-${p.key}">${p.pergunta}</label>
+            <textarea id="tese-${p.key}" data-tese="${p.key}" rows="4">${state.tese[p.key]}</textarea>
+          </div>`
+        ).join('')}
+        <span id="tese-contador" class="tese-contador ${teseCompleta() ? 'tese-ok' : ''}">${usados} / ${TESE_MIN_CARACTERES} caracteres no total</span>
+        <button id="revelar-btn" class="btn btn-primary" ${podeGerarRelatorio() ? '' : 'disabled'}>
+          Gerar relatório
         </button>
+        <span id="revelar-status" class="muted"></span>
       </section>
 
       <section class="card no-print">
@@ -476,8 +539,37 @@ export async function render(container, query) {
       <div class="print-only tese-analista">
         <h2>Tese do analista</h2>
         <p><span class="badge badge-neutral">Veredito: ${state.veredictoMembro}</span></p>
-        <p>${state.justificativa ? `"${state.justificativa}"` : '<span class="muted">Nenhuma justificativa registrada.</span>'}</p>
+        ${PERGUNTAS_TESE.map((p) => `<p><strong>${p.titulo}:</strong> ${state.tese[p.key].trim()}</p>`).join('')}
       </div>`
+  }
+
+  function comparacaoTeseHtml(indicadores, veredictoSistema, score, max) {
+    const leitura = leituraDoSistema(indicadores, {
+      score,
+      max,
+      veredicto: veredictoSistema,
+      peersCount: state.peersCount,
+    })
+
+    return `
+      <section class="card stack-card comparacao-tese">
+        <h2>Sua leitura × o que os dados mostram</h2>
+        <div class="comparacao-colunas">
+          <div class="comparacao-coluna">
+            <h3>O que você concluiu</h3>
+            <p><span class="badge badge-neutral">${state.veredictoMembro}</span></p>
+            ${PERGUNTAS_TESE.map(
+              (p) => `<p class="tese-registrada"><strong>${p.titulo}:</strong> ${state.tese[p.key].trim()}</p>`
+            ).join('')}
+            ${state.registradoEm ? `<p class="muted">Registrado em ${formatDataHora(state.registradoEm)} — antes de ver os números ao lado.</p>` : ''}
+          </div>
+          <div class="comparacao-coluna">
+            <h3>O que os dados mostram</h3>
+            <p><span class="badge badge-${veredictoSistema === 'COMPRA' ? 'ok' : veredictoSistema === 'VENDA' ? 'danger' : 'warn'}">${veredictoSistema}</span> <span class="muted">score ${score}/${max}</span></p>
+            ${leitura.map((frase) => `<p>${frase}</p>`).join('')}
+          </div>
+        </div>
+      </section>`
   }
 
   function relatorioRodapeHtml() {
@@ -499,6 +591,7 @@ export async function render(container, query) {
       ${printHeaderHtml(dados)}
       ${fichaTecnicaHtml(dados, indicadores, veredictoSistema)}
       ${teseAnalistaHtml()}
+      ${comparacaoTeseHtml(indicadores, veredictoSistema, score, max)}
 
       <section class="grid-2">
         <div class="card gauge-card">
@@ -559,11 +652,8 @@ export async function render(container, query) {
       ${relatorioRodapeHtml()}
 
       <section class="card no-print">
-        <button id="salvar-btn" class="btn btn-primary" ${state.salvo ? 'disabled' : ''}>
-          ${state.salvo ? 'Análise salva ✓' : state.salvando ? 'Salvando…' : 'Salvar análise'}
-        </button>
-        <button id="exportar-btn" class="btn btn-primary" style="margin-left: 8px">Exportar PDF</button>
-        <span id="salvar-status" class="muted"></span>
+        <button id="exportar-btn" class="btn btn-primary">Exportar PDF</button>
+        <span class="muted" style="margin-left: 12px">Análise registrada ✓${state.registradoEm ? ` em ${formatDataHora(state.registradoEm)}` : ''}</span>
       </section>`
   }
 
@@ -591,22 +681,45 @@ export async function render(container, query) {
   }
 
   function bindVeredictoForm() {
-    const justificativaInput = container.querySelector('#justificativa')
-    justificativaInput.addEventListener('input', (e) => {
-      state.justificativa = e.target.value
-    })
-
     const revelarBtn = container.querySelector('#revelar-btn')
-    container.querySelectorAll('input[name="veredito-membro"]').forEach((radio) => {
-      radio.addEventListener('change', (e) => {
-        state.veredictoMembro = e.target.value
-        revelarBtn.disabled = false
+    const contador = container.querySelector('#tese-contador')
+    const statusEl = container.querySelector('#revelar-status')
+
+    function atualizarTravaDoRelatorio() {
+      contador.textContent = `${caracteresDaTese()} / ${TESE_MIN_CARACTERES} caracteres no total`
+      contador.classList.toggle('tese-ok', teseCompleta())
+      revelarBtn.disabled = !podeGerarRelatorio()
+    }
+
+    PERGUNTAS_TESE.forEach((p) => {
+      container.querySelector(`#tese-${p.key}`).addEventListener('input', (e) => {
+        state.tese[p.key] = e.target.value
+        atualizarTravaDoRelatorio()
       })
     })
 
-    revelarBtn.addEventListener('click', () => {
-      state.revelado = true
-      draw()
+    container.querySelectorAll('input[name="veredito-membro"]').forEach((radio) => {
+      radio.addEventListener('change', (e) => {
+        state.veredictoMembro = e.target.value
+        atualizarTravaDoRelatorio()
+      })
+    })
+
+    revelarBtn.addEventListener('click', async () => {
+      if (!podeGerarRelatorio()) return
+
+      revelarBtn.disabled = true
+      revelarBtn.textContent = 'Registrando…'
+      statusEl.textContent = ''
+      try {
+        await registrarAnalise()
+        state.revelado = true
+        draw()
+      } catch (error) {
+        revelarBtn.disabled = false
+        revelarBtn.textContent = 'Gerar relatório'
+        statusEl.textContent = `Erro ao registrar a tese: ${error.message}`
+      }
     })
 
     CRITERIOS_QUALITATIVOS.forEach((c) => {
@@ -689,36 +802,34 @@ export async function render(container, query) {
       })
     })
 
-    const salvarBtn = container.querySelector('#salvar-btn')
-    const statusEl = container.querySelector('#salvar-status')
-    salvarBtn.addEventListener('click', async () => {
-      const { score, max, veredictoSistema } = atualizarIndicadoresView()
-      state.salvando = true
-      salvarBtn.disabled = true
-      salvarBtn.textContent = 'Salvando…'
-      try {
-        await salvarAnalise({
-          ticker: state.empresa.ticker,
-          periodo: state.periodoSelecionado.periodo,
-          membro: state.membro || 'Anônimo',
-          veredito_membro: state.veredictoMembro,
-          notas_membro: state.justificativa,
-          veredito_sistema: veredictoSistema,
-          score_sistema: score,
-          score_max: max,
-          scorecard_qualitativo: scorecardParaSalvar(),
-        })
-        state.salvando = false
-        state.salvo = true
-        salvarBtn.textContent = 'Análise salva ✓'
-        statusEl.textContent = ''
-      } catch (error) {
-        state.salvando = false
-        salvarBtn.disabled = false
-        salvarBtn.textContent = 'Salvar análise'
-        statusEl.textContent = `Erro: ${error.message}`
-      }
+  }
+
+  /**
+   * Grava a análise no momento em que o membro pede o relatório — ou seja, com a tese
+   * travada ANTES de ele ver qualquer número do sistema. Depois disso a tese não é mais
+   * editável nesta tela, que é o que dá integridade formativa ao registro.
+   */
+  async function registrarAnalise() {
+    const indicadores = indicadoresAtuais()
+    const { score, max } = computeScore(indicadores)
+    const veredictoSistema = veredictoAutomatico(score, max)
+    const registradoEm = new Date().toISOString()
+
+    await salvarAnalise({
+      ticker: state.empresa.ticker,
+      periodo: state.periodoSelecionado.periodo,
+      membro: state.membro || 'Anônimo',
+      membro_id: membroId,
+      veredito_membro: state.veredictoMembro,
+      notas_membro: teseTexto(),
+      tese_registrada_em: registradoEm,
+      veredito_sistema: veredictoSistema,
+      score_sistema: score,
+      score_max: max,
+      scorecard_qualitativo: scorecardParaSalvar(),
     })
+
+    state.registradoEm = registradoEm
   }
 
   function scorecardParaSalvar() {
@@ -819,12 +930,11 @@ export async function render(container, query) {
   function resetVereditoState() {
     state.membro = nomeMembro
     state.veredictoMembro = null
-    state.justificativa = ''
+    state.tese = { saude: '', compraria: '', preocupacao: '' }
     state.scorecard = { governanca: null, gestao: null, posicaoCompetitiva: null, riscos: null, observacoes: '' }
     state.preco = null
     state.numAcoes = null
-    state.salvando = false
-    state.salvo = false
+    state.registradoEm = null
   }
 
   const tickerPreselecionado = query?.get('ticker')
