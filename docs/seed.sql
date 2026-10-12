@@ -69,6 +69,9 @@ insert into benchmarks (subsetor, indicador, bom_min, bom_max, ok_min, ok_max, i
 ('agroservicos','div',0,3,3,5,true);
 
 -- ────────────────────────────────────────────────────────────────
+--  >>> SUPERADO: os numeros abaixo eram estimativas imprecisas (receita, lucro,
+--  EBITDA e divida nao batem com os resultados reais das empresas). Use
+--  docs/atualizar_dados_2020_2025.sql, que traz 2020-2025 de fonte real.
 --  DADOS FINANCEIROS (histórico 2022–2024)
 --  Valores em reais. Fonte: releases públicos, CVM, Status Invest.
 -- ────────────────────────────────────────────────────────────────

@@ -189,6 +189,24 @@ Método de coleta (reaproveitável pra outras empresas/campos no futuro): buscar
 
 ---
 
+---
+
+## 8.2 Base quantitativa reconstruída de 2020 a 2025 (2026-10-12)
+
+Descoberta que amplia a da seção 8.1: **não era só a dívida líquida** — receita, lucro e EBITDA do `seed.sql` original também eram estimativas inventadas, não números reais. Dois exemplos verificados: SLCE3 2024 estava como receita de R$ 9,59 bi quando o valor real é R$ 7,80 bi (9,59 bi é, na verdade, a receita de 2022); ABEV3 2024 estava 84,8 bi contra 89,45 bi reais. A validação foi feita somando os quatro trimestres de 2024 da SLCE3 no próprio site (2,05+1,65+2,11+1,99 = 7,80 bi, idêntico à coluna anual) e conferindo a Ambev contra o resultado divulgado pela empresa.
+
+A base foi reconstruída para **2020-2025, 31 empresas, 185 linhas**, a partir de dadosdemercado.com.br, em `docs/atualizar_dados_2020_2025.sql` (DELETE dos períodos + INSERT). Campos: receita, lucro, EBITDA, dívida bruta/líquida, caixa, PL, ativos totais, margens, ROE e dívida/EBITDA.
+
+Três tabelas por página, todas anuais exceto o balanço: `#marketratios` (EBITDA, dívidas, ROE, margens), `#incomesYear` (receita, lucro) e `#balances` (coluna 4T de cada ano: PL, ativo total, caixa). **Atenção ao raspar de novo:** o WAF do site bloqueia rajadas — usar ~12s entre empresas e backoff em 403 (script em `coletar_lento.mjs`, no scratchpad da sessão).
+
+**Limitações conhecidas, deixadas em branco em vez de estimadas:**
+- **CAML3**: sem EBITDA na fonte (vem `--`) e sem PL/ativos totais (a tabela de balanço dela não tem coluna de 4T, por causa do ano fiscal em fevereiro).
+- **CRFB3**: sem 2025 na fonte (provável reflexo do fechamento de capital).
+- **Capex**: a tabela de fluxo de caixa do site não separa "aquisição de imobilizado e intangível"; só traz caixa líquido de investimento, que mistura aquisições. Ficou sem preencher. FCO e D&A, por outro lado, existem lá e podem ser coletados se virarem necessários.
+- **Ano fiscal quebrado** (AGRO3 junho, JALL3/SMTO3/RAIZ4 ~março, CAML3 ~fevereiro): nessas cinco, receita/lucro/EBITDA/ROE são do ano fiscal da empresa, enquanto PL/ativos/caixa são do balanço de 31/dez. Cada campo está certo na sua própria base, mas recalcular ROE ou DuPont a partir de lucro ÷ PL mistura datas diferentes. Se isso incomodar, dá pra zerar PL/ativos dessas cinco ou buscar o balanço do trimestre fiscal correto.
+
+---
+
 ## 9. O que NÃO existe ainda (gaps conhecidos)
 
 Já feitos desde a versão original deste documento (não são mais gaps): deploy público, autenticação, alertas de piora, exportar PDF, painel de admin de benchmarks, testes automatizados, perfis de membro com hierarquia e painel de gerenciamento.
