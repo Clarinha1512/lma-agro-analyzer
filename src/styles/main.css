@@ -667,15 +667,9 @@ textarea {
 
 /* Comparação: tese do membro × dados do sistema */
 .comparacao-colunas {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
-}
-
-@media (max-width: 900px) {
-  .comparacao-colunas {
-    grid-template-columns: 1fr;
-  }
 }
 
 .comparacao-coluna h3 {
@@ -692,22 +686,18 @@ textarea {
 }
 
 .comparacao-coluna + .comparacao-coluna {
-  border-left: 1px solid var(--color-border);
-  padding-left: 20px;
-}
-
-@media (max-width: 900px) {
-  .comparacao-coluna + .comparacao-coluna {
-    border-left: none;
-    padding-left: 0;
-    border-top: 1px solid var(--color-border);
-    padding-top: 16px;
-  }
+  border-top: 1px solid var(--color-border);
+  padding-top: 18px;
 }
 
 .tese-registrada {
   font-style: italic;
   white-space: pre-wrap;
+}
+
+/* O título da pergunta não entra no itálico — só a resposta do membro */
+.tese-registrada strong {
+  font-style: normal;
 }
 
 /* Scorecard qualitativo */
@@ -1076,9 +1066,26 @@ p.nota-pedagogica {
   margin: 2px 0;
 }
 
+@page {
+  margin: 12mm;
+}
+
 @media print {
+  /* Sem isto o navegador imprime os fundos em branco e some com o verde/dourado da liga */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   .no-print {
     display: none !important;
+  }
+
+  /* A coluna do membro sai do PDF (a tese já aparece no bloco "Tese do analista"),
+     então a borda que separava as duas não faz mais sentido */
+  .comparacao-coluna + .comparacao-coluna {
+    border-top: none;
+    padding-top: 0;
   }
 
   .print-only {
@@ -1102,6 +1109,26 @@ p.nota-pedagogica {
     box-shadow: none;
     border: 1px solid #ccc;
     break-inside: avoid;
+  }
+
+  /* A página impressa tem menos de 900px de largura, então o breakpoint de celular
+     entrava e empilhava os cards — isso jogava cada gráfico numa página. */
+  .grid-2 {
+    grid-template-columns: 1.3fr 1fr !important;
+  }
+
+  /* Chart.js escreve altura inline no canvas; sem o !important o gráfico sai enorme
+     e empurra o resto do conteúdo pra próxima página. */
+  canvas {
+    max-height: 190px !important;
+  }
+
+  .gauge-svg {
+    max-width: 130px;
+  }
+
+  .stat-value {
+    font-size: 15px;
   }
 
   .print-header,

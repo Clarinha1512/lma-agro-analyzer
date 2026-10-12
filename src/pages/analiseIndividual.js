@@ -65,6 +65,11 @@ function formatNumero(valor, casas = 1) {
   return valor.toLocaleString('pt-BR', { maximumFractionDigits: casas })
 }
 
+function formatData(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 function formatDataHora(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('pt-BR', {
@@ -454,12 +459,10 @@ export async function render(container, query) {
   }
 
   function printHeaderHtml(dados) {
-    const agora = new Date().toLocaleString('pt-BR', {
+    const hoje = new Date().toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     })
     return `
       <div class="print-only print-header">
@@ -473,7 +476,7 @@ export async function render(container, query) {
         <div class="print-header-meta">
           <strong>${state.empresa.ticker}</strong>
           <span>${formatPeriodo(dados.periodo)} (${dados.tipo})</span>
-          <span>${agora}</span>
+          <span>${hoje}</span>
         </div>
       </div>`
   }
@@ -492,53 +495,63 @@ export async function render(container, query) {
     const upside =
       dcf?.precoJusto != null && precoAtual ? ((dcf.precoJusto - precoAtual) / precoAtual) * 100 : null
     const veredictoClasse = veredictoSistema === 'COMPRA' ? 'ok' : veredictoSistema === 'VENDA' ? 'danger' : 'warn'
-    const valor = (v, unidade, casas = 1) => (v != null ? `${formatNumero(v, casas)}${unidade}` : '—')
+
+    // Só entra na ficha o que tem valor — campo vazio no topo do relatório polui mais
+    // do que informa (P/L, P/VP, EV e preço-alvo dependem de preço e nº de ações).
+    const destaques = [
+      `<div class="ficha-item ficha-rating"><span class="muted">Rating do sistema</span><span class="badge badge-${veredictoClasse}">${veredictoSistema}</span></div>`,
+    ]
+    if (precoAtual) {
+      destaques.push(
+        `<div class="ficha-item"><span class="muted">Preço atual</span><strong>R$ ${formatNumero(precoAtual, 2)}</strong></div>`
+      )
+    }
+    if (dcf?.precoJusto != null) {
+      destaques.push(
+        `<div class="ficha-item"><span class="muted">Preço-alvo (DCF)</span><strong>R$ ${formatNumero(dcf.precoJusto, 2)}</strong></div>`
+      )
+    }
+    if (upside != null) {
+      destaques.push(
+        `<div class="ficha-item"><span class="muted">Potencial</span><strong class="${upside >= 0 ? 'mediana-favoravel' : 'mediana-desfavoravel'}">${upside >= 0 ? '+' : ''}${formatNumero(upside)}%</strong></div>`
+      )
+    }
+
+    const colunas = [
+      ['ROE', porChave.roe.valor, '%', 1],
+      ['Margem líq.', porChave.mg.valor, '%', 1],
+      ['Dívida/EBITDA', porChave.div.valor, 'x', 2],
+      ['P/L', porChave.pl.valor, 'x', 1],
+      ['P/VP', porChave.pvp.valor, 'x', 1],
+      ['EV/EBITDA', evMultiplos?.evEbitda, 'x', 2],
+    ].filter(([, v]) => v != null)
 
     return `
       <div class="print-only ficha-tecnica">
-        <div class="ficha-tecnica-topo">
-          <div class="ficha-item ficha-rating">
-            <span class="muted">Rating do sistema</span>
-            <span class="badge badge-${veredictoClasse}">${veredictoSistema}</span>
-          </div>
-          <div class="ficha-item">
-            <span class="muted">Preço atual</span>
-            <strong>${precoAtual ? `R$ ${formatNumero(precoAtual, 2)}` : '—'}</strong>
-          </div>
-          <div class="ficha-item">
-            <span class="muted">Preço-alvo (DCF)</span>
-            <strong>${dcf?.precoJusto != null ? `R$ ${formatNumero(dcf.precoJusto, 2)}` : '—'}</strong>
-          </div>
-          <div class="ficha-item">
-            <span class="muted">Potencial</span>
-            <strong class="${upside == null ? '' : upside >= 0 ? 'mediana-favoravel' : 'mediana-desfavoravel'}">${upside != null ? `${upside >= 0 ? '+' : ''}${formatNumero(upside)}%` : '—'}</strong>
-          </div>
-        </div>
-        <table class="ficha-tabela">
-          <thead>
-            <tr><th>ROE</th><th>Margem líq.</th><th>Dívida/EBITDA</th><th>P/L</th><th>P/VP</th><th>EV/EBITDA</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>${valor(porChave.roe.valor, '%')}</td>
-              <td>${valor(porChave.mg.valor, '%')}</td>
-              <td>${valor(porChave.div.valor, 'x')}</td>
-              <td>${valor(porChave.pl.valor, 'x')}</td>
-              <td>${valor(porChave.pvp.valor, 'x')}</td>
-              <td>${valor(evMultiplos?.evEbitda, 'x', 2)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="ficha-tecnica-topo">${destaques.join('')}</div>
+        ${
+          colunas.length
+            ? `<table class="ficha-tabela">
+                <thead><tr>${colunas.map(([rotulo]) => `<th>${rotulo}</th>`).join('')}</tr></thead>
+                <tbody><tr>${colunas
+                  .map(([, v, unidade, casas]) => `<td>${formatNumero(v, casas)}${unidade}</td>`)
+                  .join('')}</tr></tbody>
+              </table>`
+            : ''
+        }
         <p class="ficha-analista">Analista: <strong>${state.membro || 'Anônimo'}</strong> · ${state.empresa.nome} · ${state.empresa.subsetor_label}</p>
       </div>`
   }
+
 
   function teseAnalistaHtml() {
     if (!state.veredictoMembro) return ''
     return `
       <div class="print-only tese-analista">
         <h2>Tese do analista</h2>
-        <p><span class="badge badge-neutral">Veredito: ${state.veredictoMembro}</span></p>
+        <p><span class="badge badge-neutral">Veredito: ${state.veredictoMembro}</span>${
+          state.registradoEm ? ` <span class="muted">registrado em ${formatData(state.registradoEm)}</span>` : ''
+        }</p>
         ${PERGUNTAS_TESE.map((p) => `<p><strong>${p.titulo}:</strong> ${state.tese[p.key].trim()}</p>`).join('')}
       </div>`
   }
@@ -553,18 +566,19 @@ export async function render(container, query) {
 
     return `
       <section class="card stack-card comparacao-tese">
-        <h2>Sua leitura × o que os dados mostram</h2>
+        <h2 class="no-print">Sua leitura × o que os dados mostram</h2>
+        <h2 class="print-only">O que os dados mostram</h2>
         <div class="comparacao-colunas">
-          <div class="comparacao-coluna">
+          <div class="comparacao-coluna no-print">
             <h3>O que você concluiu</h3>
             <p><span class="badge badge-neutral">${state.veredictoMembro}</span></p>
             ${PERGUNTAS_TESE.map(
               (p) => `<p class="tese-registrada"><strong>${p.titulo}:</strong> ${state.tese[p.key].trim()}</p>`
             ).join('')}
-            ${state.registradoEm ? `<p class="muted">Registrado em ${formatDataHora(state.registradoEm)} — antes de ver os números ao lado.</p>` : ''}
+            ${state.registradoEm ? `<p class="muted">Registrado em ${formatDataHora(state.registradoEm)} — antes de ver os números abaixo.</p>` : ''}
           </div>
           <div class="comparacao-coluna">
-            <h3>O que os dados mostram</h3>
+            <h3 class="no-print">O que os dados mostram</h3>
             <p><span class="badge badge-${veredictoSistema === 'COMPRA' ? 'ok' : veredictoSistema === 'VENDA' ? 'danger' : 'warn'}">${veredictoSistema}</span> <span class="muted">score ${score}/${max}</span></p>
             ${leitura.map((frase) => `<p>${frase}</p>`).join('')}
           </div>
